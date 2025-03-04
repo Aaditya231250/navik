@@ -1,32 +1,34 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"log"
-
-	"github.com/segmentio/kafka-go"
+	"github.com/IBM/sarama"
 )
 
-// publishMessage sends a message to the Kafka topic
-func publishMessage(brokers []string, topic, key, value string) error {
-	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:  brokers,
-		Topic:    topic,
-		Balancer: &kafka.LeastBytes{},
-	})
-	defer writer.Close()
+func publishMessage(brokers []string, topic string, message []byte) error {
+	config := sarama.NewConfig()
+	config.Producer.Return.Successes = true
 
-	ctx := context.Background()
-	err := writer.WriteMessages(ctx, kafka.Message{
-		Key:   []byte(key),
-		Value: []byte(value),
-	})
-
+	producer, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
-		return fmt.Errorf("failed to write message: %v", err)
+		log.Printf("Kafka producer creation failed: %v", err)
+		return err
+	}
+	defer producer.Close()
+
+	kafkaMsg := &sarama.ProducerMessage{
+		Topic: topic,
+		Value: sarama.ByteEncoder(message),
 	}
 
-	log.Printf("Message published to topic '%s': %s", topic, value)
+	_, _, err = producer.SendMessage(kafkaMsg)
+	if err != nil {
+		log.Printf("Failed to send message to Kafka: %v", err)
+		return err
+	}
+
+	log.Printf("Message sent to topic %s", topic)
+
 	return nil
 }
+

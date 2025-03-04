@@ -4,13 +4,21 @@ import (
 	"log"
 )
 
-func main() {
-	brokers := []string{"localhost:9092"}
-	topic := "driver-position-update"
+const (
+	KafkaBroker   = "localhost:9092"
+	DriverTopic    = "driver-location-updates"
+	RiderTopic    = "rider-location-updates"
+	ServerAddress = ":6969"
+)
 
-	if err := createTopic(brokers, topic); err != nil {
-		log.Fatal(err)
-		return
+func main() {
+	brokers := []string{KafkaBroker}
+
+	if err := createTopic(brokers, DriverTopic); err != nil {
+		log.Fatalf("Failed to create driver topic: %v", err)
+	}
+	if err := createTopic(brokers, RiderTopic); err != nil {
+		log.Fatalf("Failed to create rider topic: %v", err)
 	}
 
 	// Start HTTP server

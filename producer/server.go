@@ -4,38 +4,66 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 )
 
-// MessageRequest represents the expected JSON request body
-type MessageRequest struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+type DriverLocationUpdate struct {
+	DriverID  string  `json:"driver_id,omitempty"`
+	RiderID   string  `json:"rider_id,omitempty"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Timestamp int64   `json:"timestamp"`
 }
 
-// publishHandler handles the POST request to send messages to Kafka
+type KafkaMessage struct {
+	Topic   string      `json:"topic"`
+	Payload interface{} `json:"payload"`
+}
+
 func publishHandler(w http.ResponseWriter, r *http.Request) {
-	var msgReq MessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&msgReq); err != nil {
+	var locationUpdate DriverLocationUpdate
+	if err := json.NewDecoder(r.Body).Decode(&locationUpdate); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	brokers := []string{"localhost:9092"}
-	topic := "driver-position-update"
+	var topic string
+	if locationUpdate.DriverID != "" {
+		topic = DriverTopic
+	} else if locationUpdate.RiderID != "" {
+		topic = RiderTopic
+	} else {
+		http.Error(w, "Either driver_id or rider_id is required", http.StatusBadRequest)
+		return
+	}
 
-	// Publish message to Kafka
-	if err := publishMessage(brokers, topic, msgReq.Key, msgReq.Value); err != nil {
+	if locationUpdate.Timestamp == 0 {
+		locationUpdate.Timestamp = time.Now().Unix()
+	}
+
+	message := KafkaMessage{
+		Topic:   topic,
+		Payload: locationUpdate,
+	}
+
+	jsonData, err := json.Marshal(message)
+	if err != nil {
+		http.Error(w, "Failed to encode message", http.StatusInternalServerError)
+		return
+	}
+
+	if err := publishMessage([]string{KafkaBroker}, topic, jsonData); err != nil {
 		http.Error(w, "Failed to publish message", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Message published successfully"))
+	w.Write([]byte("Location update published successfully"))
 }
 
 func StartServer() {
 	http.HandleFunc("/api/driver/update-position", publishHandler)
 
-	log.Println("Server started on :6969")
-	log.Fatal(http.ListenAndServe(":6969", nil))
+	log.Printf("🚀 Server started on %s\n", ServerAddress)
+	log.Fatal(http.ListenAndServe(ServerAddress, nil))
 }

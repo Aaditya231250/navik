@@ -6,7 +6,7 @@ import (
 
 const (
 	KafkaBroker   = "localhost:9092"
-	DriverTopic    = "driver-location-updates"
+	DriverTopic   = "driver-location-updates"
 	RiderTopic    = "rider-location-updates"
 	ServerAddress = ":6969"
 )

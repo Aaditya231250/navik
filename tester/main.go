@@ -5,40 +5,39 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
-
 	"github.com/IBM/sarama"
 )
 
 type Location struct {
-	City      string  `json:"city"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Timestamp int64   `json:"timestamp"`
+	DriverID    string  `json:"driver_id"`
+	City        string  `json:"city"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	Timestamp   int64   `json:"timestamp"`
+	VehicleType string  `json:"vehicle_type"`
+	Status      string  `json:"status"`
 }
 
-// Use all brokers in a single list
-var brokers = []string{
-	"localhost:9101", // Mumbai
-	"localhost:9102", // Pune
-	"localhost:9103", // Delhi
-}
-
-var cityBounds = map[string][2][2]float64{
-	"mumbai": {{18.96, 72.79}, {19.25, 72.98}},
-	"pune":   {{18.45, 73.75}, {18.65, 74.00}},
-	"delhi":  {{28.40, 76.80}, {28.90, 77.40}},
-}
+var (
+	brokers = []string{"localhost:9101", "localhost:9102", "localhost:9103"}
+	cityBounds = map[string][2][2]float64{
+		"mumbai": {{18.96, 72.79}, {19.25, 72.98}},
+		"pune":   {{18.45, 73.75}, {18.65, 74.00}},
+		"delhi":  {{28.40, 76.80}, {28.90, 77.40}},
+	}
+	vehicleTypes = []string{"STANDARD", "PREMIUM", "POOL", "LUXURY"}
+	statuses     = []string{"ACTIVE", "INACTIVE", "BUSY"}
+	driverPrefix = []string{"MH", "DL", "GA", "KA"}
+)
 
 func main() {
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Retry.Max = 5
-	config.Producer.Retry.Backoff = 100 * time.Millisecond
 	config.Producer.Return.Successes = true
 	config.Net.DialTimeout = 10 * time.Second
-	config.Version = sarama.V3_5_0_0 // Match Kafka 7.5.1 version
+	config.Version = sarama.V3_5_0_0
 
-	// Create a single producer for all brokers
 	producer, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create producer: %v", err))
@@ -46,27 +45,53 @@ func main() {
 	defer producer.Close()
 
 	rand.Seed(time.Now().UnixNano())
+	
+	// Maintain pool of generated driver IDs
+	driverPool := generateDriverPool(1000) 
+
 	for i := 0; ; i++ {
 		for city := range cityBounds {
-			loc := generateLocation(city)
+			loc := Location{
+				DriverID:    driverPool[rand.Intn(len(driverPool))],
+				City:        city,
+				Latitude:    randomInRange(cityBounds[city][0][0], cityBounds[city][1][0]),
+				Longitude:   randomInRange(cityBounds[city][0][1], cityBounds[city][1][1]),
+				Timestamp:   time.Now().Unix(),
+				VehicleType: vehicleTypes[rand.Intn(len(vehicleTypes))],
+				Status:      weightedStatus(0.8), // 80% active
+			}
+
 			if err := sendToKafka(producer, loc); err != nil {
 				fmt.Printf("Error sending to %s: %v\n", city, err)
 				continue
 			}
-			fmt.Printf("Sent to %s: %+v\n", city, loc)
+			fmt.Printf("Sent %+v\n", loc)
 		}
-		time.Sleep(1000000 * time.Microsecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
-func generateLocation(city string) Location {
-	bounds := cityBounds[city]
-	return Location{
-		City:      city,
-		Latitude:  bounds[0][0] + rand.Float64()*(bounds[1][0]-bounds[0][0]),
-		Longitude: bounds[0][1] + rand.Float64()*(bounds[1][1]-bounds[0][1]),
-		Timestamp: time.Now().UnixNano(),
+func generateDriverPool(size int) []string {
+	pool := make([]string, size)
+	for i := 0; i < size; i++ {
+		pool[i] = fmt.Sprintf("%s-%04d%04d",
+			driverPrefix[rand.Intn(len(driverPrefix))],
+			rand.Intn(10000),
+			rand.Intn(10000),
+		)
 	}
+	return pool
+}
+
+func weightedStatus(activeProb float64) string {
+	if rand.Float64() < activeProb {
+		return "ACTIVE"
+	}
+	return statuses[rand.Intn(len(statuses)-1)+1]
+}
+
+func randomInRange(min, max float64) float64 {
+	return min + rand.Float64()*(max-min)
 }
 
 func sendToKafka(producer sarama.SyncProducer, loc Location) error {

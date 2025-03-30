@@ -1,11 +1,13 @@
+version: '3.8'
+
 services:
   kafka-mumbai:
     image: confluentinc/cp-kafka:7.5.1
-    container_name: kafka-mumbai
+    hostname: kafka-mumbai
     ports:
-      - "29092:29092"  # Internal broker communication
-      - "9093:9093"    # Controller port
-      - "9101:9101"    # External client access
+      - "29092:29092"
+      - "9093:9093"  
+      - "9101:9101"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_NODE_ID: 1
@@ -16,29 +18,29 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
       CLUSTER_ID: "XxLmcxwkQpieZydFQPRnzw"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     volumes:
       - kafka-mumbai-data:/var/lib/kafka/data
     networks:
       - kafka-network
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka-mumbai:29092 --list"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 15s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
 
   kafka-pune:
     image: confluentinc/cp-kafka:7.5.1
-    container_name: kafka-pune
+    hostname: kafka-pune
     ports:
-      - "29093:29092"  # Internal broker communication
-      - "9095:9093"    # Controller port
-      - "9102:9102"    # External client access
+      - "29093:29092"
+      - "9095:9093"
+      - "9102:9102"
     environment:
       KAFKA_BROKER_ID: 2
       KAFKA_NODE_ID: 2
@@ -49,26 +51,30 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
       CLUSTER_ID: "XxLmcxwkQpieZydFQPRnzw"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     volumes:
       - kafka-pune-data:/var/lib/kafka/data
     networks:
       - kafka-network
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka-pune:29092 --list"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 15s
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    depends_on:
+      - kafka-mumbai
 
   kafka-delhi:
     image: confluentinc/cp-kafka:7.5.1
-    container_name: kafka-delhi
+    hostname: kafka-delhi
     ports:
-      - "29094:29092"  # Internal broker communication
-      - "9097:9093"    # Controller port
-      - "9103:9103"    # External client access
+      - "29094:29092"
+      - "9097:9093"
+      - "9103:9103"
     environment:
       KAFKA_BROKER_ID: 3
       KAFKA_NODE_ID: 3
@@ -79,29 +85,51 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
       CLUSTER_ID: "XxLmcxwkQpieZydFQPRnzw"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     volumes:
       - kafka-delhi-data:/var/lib/kafka/data
     networks:
       - kafka-network
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka-delhi:29092 --list"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 15s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    depends_on:
+      - kafka-mumbai
+
+  kafka-topics-init:
+    image: confluentinc/cp-kafka:7.5.1
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      "
+      echo 'Waiting for Kafka to be ready...'
+      sleep 45
+      echo 'Creating topics...'
+      kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic mumbai-locations --partitions 3 --replication-factor 3
+      kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic pune-locations --partitions 3 --replication-factor 3
+      kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic delhi-locations --partitions 3 --replication-factor 3
+      echo 'Topics created!'
+      exit 0
+      "
+    networks:
+      - kafka-network
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    depends_on:
+      - kafka-mumbai
+      - kafka-pune
+      - kafka-delhi
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    depends_on:
-      kafka-mumbai:
-        condition: service_healthy
-      kafka-pune:
-        condition: service_healthy
-      kafka-delhi:
-        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
@@ -110,26 +138,29 @@ services:
       KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: PLAINTEXT
     networks:
       - kafka-network
-
+    deploy:
+      restart_policy:
+        condition: on-failure
+    depends_on:
+      - kafka-mumbai
+      - kafka-pune
+      - kafka-delhi
+  
   producer:
-    build:
-      context: ./driver-location-service
-      dockerfile: producer.Dockerfile
+    image: producer-service:latest
     ports:
       - "6969:6969"
     depends_on:
-      kafka-mumbai:
-        condition: service_healthy
-      kafka-pune:
-        condition: service_healthy
-      kafka-delhi:
-        condition: service_healthy
+      - kafka-mumbai
+      - kafka-pune
+      - kafka-delhi
     environment:
-          - KAFKA_BROKERS=localhost:9101,localhost:9102,localhost:9103
+      - KAFKA_BROKERS=kafka-mumbai:29092,kafka-pune:29092,kafka-delhi:29092
     deploy:
       replicas: 2
       restart_policy:
         condition: on-failure
+        max_attempts: 2
       update_config:
         parallelism: 1
         delay: 10s
@@ -141,22 +172,18 @@ services:
       - kafka-network
 
   consumer:
-    build:
-      context: ./driver-location-service
-      dockerfile: consumer.Dockerfile
+    image: consumer-service:latest
     depends_on:
-      kafka-mumbai:
-        condition: service_healthy
-      kafka-pune:
-        condition: service_healthy
-      kafka-delhi:
-        condition: service_healthy
+      - kafka-mumbai
+      - kafka-pune
+      - kafka-delhi
     environment:
-      - KAFKA_BROKERS=localhost:9101,localhost:9102,localhost:9103
+      - KAFKA_BROKERS=kafka-mumbai:29092,kafka-pune:29092,kafka-delhi:29092
     deploy:
-      replicas: 3
+      replicas: 2
       restart_policy:
         condition: on-failure
+        max_attempts: 2
       update_config:
         parallelism: 1
         delay: 10s
@@ -166,22 +193,22 @@ services:
           memory: 256M
     networks:
       - kafka-network
+
+  visualizer:
+    image: dockersamples/visualizer:latest
+    ports:
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - kafka-network
+
 networks:
   kafka-network:
-    driver: bridge
-    name: kafka-network
+    driver: overlay
+    attachable: true
 
-# volumes:
-#   kafka-mumbai-data:
-#   kafka-pune-data:
-#   kafka-delhi-data:
-#   dynamodb-data:
-
-# version: '3.8'
-
-# include:
-#   - ./kafka-infra.yml
-#   - ./driver-location-service/driver-location.yml
-
-# volumes:
-#   dynamodb-data:
+volumes:
+  kafka-mumbai-data:
+  kafka-pune-data:
+  kafka-delhi-data:

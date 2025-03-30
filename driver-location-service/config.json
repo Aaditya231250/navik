@@ -1,0 +1,11 @@
+{
+  "kafka": {
+    "brokers": ["kafka-mumbai:29092", "kafka-pune:29092", "kafka-delhi:29092"],
+    "topic_format": "%s-locations",
+    "group_id": "driver-location-consumer",
+    "topics": ["mumbai-locations", "pune-locations", "delhi-locations"]
+  },
+  "server": {
+    "port": 6969
+  }
+}

@@ -15,3 +15,24 @@ docker exec kafka-delhi kafka-topics --create \
   --bootstrap-server kafka-delhi:29092 \
   --partitions 2 \
   --replication-factor 3
+
+docker stack deploy -c driver-location-service/driver-location.yml driver-location --detach=false
+
+docker build -t producer-service:latest -f producer.Dockerfile .     
+
+docker build -t consumer-service:latest -f consumer.Dockerfile . 
+
+docker service logs driver-location_producer 
+
+docker service logs kafka-stack_kafka-delhi 
+
+docker network create --driver overlay --attachable kafka-network        
+
+docker network rm kafka-network       
+
+docker stack deploy -c kafka-infra.yml kafka-stack --detach=false
+
+docker swarm join-token worker
+
+docker service ls
+docker service scale <service-name>=<number-of-replicas>

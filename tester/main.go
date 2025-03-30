@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+
 	"github.com/IBM/sarama"
 )
 
@@ -19,7 +20,7 @@ type Location struct {
 }
 
 var (
-	brokers = []string{"localhost:9101", "localhost:9102", "localhost:9103"}
+	brokers    = []string{"localhost:9101", "localhost:9102", "localhost:9103"}
 	cityBounds = map[string][2][2]float64{
 		"mumbai": {{18.96, 72.79}, {19.25, 72.98}},
 		"pune":   {{18.45, 73.75}, {18.65, 74.00}},
@@ -45,9 +46,9 @@ func main() {
 	defer producer.Close()
 
 	rand.Seed(time.Now().UnixNano())
-	
+
 	// Maintain pool of generated driver IDs
-	driverPool := generateDriverPool(1000) 
+	driverPool := generateDriverPool(1000)
 
 	for i := 0; ; i++ {
 		for city := range cityBounds {
@@ -67,7 +68,7 @@ func main() {
 			}
 			fmt.Printf("Sent %+v\n", loc)
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(5000 * time.Millisecond)
 	}
 }
 

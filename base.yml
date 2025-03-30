@@ -1,0 +1,11 @@
+version: '3.8'
+
+networks:
+  kafka-network:
+    driver: overlay
+    attachable: true
+
+volumes:
+  kafka-mumbai-data:
+  kafka-pune-data:
+  kafka-delhi-data:

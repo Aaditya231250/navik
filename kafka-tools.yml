@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  kafka-topics-init:
+    image: confluentinc/cp-kafka:7.5.1
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      "
+      echo 'Waiting for Kafka to be ready...'
+      sleep 45
+      echo 'Creating topics...'
+      kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic mumbai-locations --partitions 3 --replication-factor 3
+      kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic pune-locations --partitions 3 --replication-factor 3
+      kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic delhi-locations --partitions 3 --replication-factor 3
+      echo 'Topics created!'
+      exit 0
+      "
+    networks:
+      - kafka-network
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+      placement:
+        constraints:
+          - node.role == manager
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: multi-region-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka-mumbai:29092,kafka-pune:29092,kafka-delhi:29092"
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: PLAINTEXT
+    networks:
+      - kafka-network
+    deploy:
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  kafka-network:
+    external: true

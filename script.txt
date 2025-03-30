@@ -36,3 +36,5 @@ docker swarm join-token worker
 
 docker service ls
 docker service scale <service-name>=<number-of-replicas>
+
+docker node ls

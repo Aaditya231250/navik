@@ -19,7 +19,7 @@ $COMPOSE_CMD up -d
 cd ../../
 
 echo "Waiting for Kafka to stablise..."
-sleep 30
+sleep 10
 
 
 echo "Starting Location Service..."

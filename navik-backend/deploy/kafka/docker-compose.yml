@@ -1,84 +1,11 @@
-docker exec kafka-mumbai kafka-topics --create \
-  --topic mumbai-locations \
-  --bootstrap-server kafka-mumbai:29092 \
-  --partitions 2 \
-  --replication-factor 3
-
-docker exec kafka-pune kafka-topics --create \
-  --topic pune-locations \
-  --bootstrap-server kafka-pune:29092 \
-  --partitions 2 \
-  --replication-factor 3
-
-docker exec kafka-delhi kafka-topics --create \
-  --topic delhi-locations \
-  --bootstrap-server kafka-delhi:29092 \
-  --partitions 2 \
-  --replication-factor 3
-
-docker stack deploy -c driver-location-service/driver-location.yml driver-location --detach=false
-
-docker build -t producer-service:latest -f producer.Dockerfile .     
-
-docker build -t consumer-service:latest -f consumer.Dockerfile . 
-
-docker service logs driver-location_producer 
-
-docker service logs kafka-stack_kafka-delhi 
-
-docker network create --driver overlay --attachable kafka-network        
-
-docker network rm kafka-network       
-
-docker stack deploy -c kafka-infra.yml kafka-stack --detach=false
-
-docker swarm join-token worker
-
-docker service ls
-docker service scale <service-name>=<number-of-replicas>
-
-docker node ls
-
-
-
-uber-backend/
-├── api/                  # API definitions, Swagger, Protobuf
-├── cmd/                  # Main applications for each service
-│   ├── user-service/
-│   ├── driver-service/
-│   ├── trip-service/
-│   └── ...
-├── deploy/               # Deployment configurations
-│   ├── docker-compose/
-│   ├── swarm/
-│   └── k8s/              # For future Kubernetes migration
-├── internal/             # Private libraries
-├── pkg/                  # Public libraries
-│   ├── auth/
-│   ├── events/
-│   ├── models/
-│   └── ...
-├── scripts/              # Utility scripts
-└── tests/                # Integration and E2E tests
-
-
-service/
-├── cmd/main.go           # Entry point
-├── internal/
-│   ├── config/           # Service configuration
-│   ├── domain/           # Domain models and business logic
-│   ├── handlers/         # HTTP/gRPC handlers
-│   ├── repository/       # Data access layer
-│   └── service/          # Service implementation
-└── Dockerfile            # Container definition
 services:
   kafka-mumbai:
     image: confluentinc/cp-kafka:7.5.1
     container_name: kafka-mumbai
-    ports:
-      - "29092:29092"  # Internal broker communication
-      - "9093:9093"    # Controller port
-      - "9101:9101"    # External client access
+    # ports:
+    #   - "29092:29092"  # Internal broker communication
+    #   - "9093:9093"    # Controller port
+    #   - "9101:9101"    # External client access
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_NODE_ID: 1
@@ -108,10 +35,10 @@ services:
   kafka-pune:
     image: confluentinc/cp-kafka:7.5.1
     container_name: kafka-pune
-    ports:
-      - "29093:29092"  # Internal broker communication
-      - "9095:9093"    # Controller port
-      - "9102:9102"    # External client access
+    # ports:
+    #   - "29093:29092"  # Internal broker communication
+    #   - "9095:9093"    # Controller port
+    #   - "9102:9102"    # External client access
     environment:
       KAFKA_BROKER_ID: 2
       KAFKA_NODE_ID: 2
@@ -138,10 +65,10 @@ services:
   kafka-delhi:
     image: confluentinc/cp-kafka:7.5.1
     container_name: kafka-delhi
-    ports:
-      - "29094:29092"  # Internal broker communication
-      - "9097:9093"    # Controller port
-      - "9103:9103"    # External client access
+    # ports:
+    #   - "29094:29092"  # Internal broker communication
+    #   - "9097:9093"    # Controller port
+    #   - "9103:9103"    # External client access
     environment:
       KAFKA_BROKER_ID: 3
       KAFKA_NODE_ID: 3
@@ -170,8 +97,6 @@ services:
     container_name: kafka-init
     depends_on:
       - kafka-mumbai
-      - kafka-pune
-      - kafka-delhi
     volumes:
       - ./scripts:/scripts
     command: >
@@ -193,72 +118,20 @@ services:
     depends_on:
       kafka-mumbai:
         condition: service_healthy
-      kafka-pune:
-        condition: service_healthy
-      kafka-delhi:
-        condition: service_healthy
-    ports:
-      - "8080:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: multi-region-cluster
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka-mumbai:29092,kafka-pune:29092,kafka-delhi:29092"
       KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: PLAINTEXT
-    networks:
-      - kafka-network
-
-  producer:
-    build:
-      context: .
-      dockerfile: producer.Dockerfile
-    ports:
-      - "6969:6969"
-    depends_on:
-      kafka-mumbai:
-        condition: service_healthy
-      kafka-pune:
-        condition: service_healthy
-      kafka-delhi:
-        condition: service_healthy
-    environment:
-      - KAFKA_BROKERS=kafka-mumbai:29092,kafka-pune:29092,kafka-delhi:29092
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 256M
-    networks:
-      - kafka-network
-
-  consumer:
-    build:
-      context: .
-      dockerfile: consumer.Dockerfile
-    depends_on:
-      kafka-mumbai:
-        condition: service_healthy
-      kafka-pune:
-        condition: service_healthy
-      kafka-delhi:
-        condition: service_healthy
-    environment:
-      - KAFKA_BROKERS=kafka-mumbai:29092,kafka-pune:29092,kafka-delhi:29092
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 256M
+      SERVER_SERVLET_CONTEXT_PATH: /kafka-ui 
     networks:
       - kafka-network
 
 networks:
   kafka-network:
-    driver: bridge
     name: kafka-network
+    driver: bridge
 
 volumes:
   kafka-mumbai-data:
   kafka-pune-data:
   kafka-delhi-data:
-  dynamodb-data:
-
-

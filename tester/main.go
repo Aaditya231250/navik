@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+
 	"github.com/IBM/sarama"
 )
 
@@ -49,6 +50,8 @@ func main() {
 	// Maintain pool of generated driver IDs
 	driverPool := generateDriverPool(1000) 
 
+	totalMessagesTransmitted := 0
+
 	for i := 0; ; i++ {
 		for city := range cityBounds {
 			loc := Location{
@@ -66,6 +69,8 @@ func main() {
 				continue
 			}
 			fmt.Printf("Sent %+v\n", loc)
+			totalMessagesTransmitted++
+			fmt.Printf("%+v", totalMessagesTransmitted)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

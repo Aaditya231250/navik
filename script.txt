@@ -15,3 +15,6 @@ docker exec kafka-delhi kafka-topics --create \
   --bootstrap-server kafka-delhi:29092 \
   --partitions 2 \
   --replication-factor 3
+
+kafka-topics --create --topic driver_queries --partitions 6
+kafka-topics --create --topic driver_results --partitions 6

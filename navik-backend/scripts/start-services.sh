@@ -18,8 +18,13 @@ cd deploy/kafka
 $COMPOSE_CMD up -d
 cd ../../
 
+echo "Starting DynamoDB infrastructure..."
+cd deploy/dynamodb
+$COMPOSE_CMD up -d
+cd ../../
+
 echo "Waiting for Kafka to stablise..."
-sleep 10
+sleep 5
 
 
 echo "Starting Location Service..."

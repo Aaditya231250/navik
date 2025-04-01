@@ -1,186 +1,210 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"net"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
-	"github.com/segmentio/kafka-go"
+	"github.com/IBM/sarama"
 )
 
-// City configurations
-var cityConfigs = map[string]struct {
-	Topic         string
-	MinLat        float64
-	MaxLat        float64
-	MinLon        float64
-	MaxLon        float64
-	Broker        string
-}{
-	"mumbai": {
-		Topic:  "mumbai-drivers",
-		MinLat: 18.9,
-		MaxLat: 19.2,
-		MinLon: 72.7,
-		MaxLon: 73.2,
-		Broker: "localhost:9101",
-	},
-	"pune": {
-		Topic:  "pune-drivers",
-		MinLat: 18.4,
-		MaxLat: 18.6,
-		MinLon: 73.7,
-		MaxLon: 74.0,
-		Broker: "localhost:9102",
-	},
-	"delhi": {
-		Topic:  "delhi-drivers",
-		MinLat: 28.4,
-		MaxLat: 28.9,
-		MinLon: 76.8,
-		MaxLon: 77.4,
-		Broker: "localhost:9103",
-	},
-}
-
-type DriverLocation struct {
-	DriverID    string  `json:"driver_id"`
+// UserLocation represents a user's location data
+type UserLocation struct {
+	UserID      string  `json:"user_id"`
 	City        string  `json:"city"`
 	Latitude    float64 `json:"latitude"`
 	Longitude   float64 `json:"longitude"`
-	Accuracy    float64 `json:"accuracy"`
 	Timestamp   int64   `json:"timestamp"`
-	VehicleType string  `json:"vehicle_type"`
+	RequestType string  `json:"request_type"`
 }
 
-func createTopicIfNotExist(broker, topic string) error {
-	conn, err := kafka.Dial("tcp", broker)
+var (
+	// Kafka broker addresses
+	brokers = []string{"localhost:9101", "localhost:9102", "localhost:9103"}
+	
+	// Geographic boundaries for each city
+	cityBounds = map[string][2][2]float64{
+		"mumbai": {{18.96, 72.79}, {19.25, 72.98}},
+		"pune":   {{18.45, 73.75}, {18.65, 74.00}},
+		"delhi":  {{28.40, 76.80}, {28.90, 77.40}},
+	}
+		
+	// User ID prefixes
+	userPrefix = []string{"MUM", "PUN", "DEL"}
+)
+
+// createTopics creates Kafka topics if they don't exist
+func createTopics(brokerList []string, topics []string, numPartitions int, replicationFactor int) error {
+	config := sarama.NewConfig()
+	config.Version = sarama.V3_5_0_0
+	
+	// Create admin client
+	admin, err := sarama.NewClusterAdmin(brokerList, config)
 	if err != nil {
-		return fmt.Errorf("failed to dial broker %s: %w", broker, err)
+		return fmt.Errorf("failed to create cluster admin: %v", err)
 	}
-	defer conn.Close()
-
-	controller, err := conn.Controller()
-	if err != nil {
-		return fmt.Errorf("failed to get controller: %w", err)
-	}
-
-	controllerConn, err := kafka.Dial("tcp", net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)))
-	if err != nil {
-		return fmt.Errorf("failed to connect to controller: %w", err)
-	}
-	defer controllerConn.Close()
-
-	partitions, err := conn.ReadPartitions()
-	if err != nil {
-		return fmt.Errorf("failed to read partitions: %w", err)
-	}
-
-	topicExists := false
-	for _, p := range partitions {
-		if p.Topic == topic {
-			topicExists = true
-			break
-		}
-	}
-
-	if !topicExists {
-		err = controllerConn.CreateTopics(kafka.TopicConfig{
-			Topic:             topic,
-			NumPartitions:     2,
-			ReplicationFactor: 1,
-			ConfigEntries: []kafka.ConfigEntry{
-				{ConfigName: "retention.ms", ConfigValue: "604800000"},
+	defer admin.Close()
+	
+	// Create each topic
+	for _, topic := range topics {
+		topicDetail := &sarama.TopicDetail{
+			NumPartitions:     int32(numPartitions),
+			ReplicationFactor: int16(replicationFactor),
+			ConfigEntries: map[string]*string{
+				"retention.ms": StringPtr("604800000"), // 7 days retention
 			},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create topic %s: %w", topic, err)
 		}
-		fmt.Printf("Created topic %s on broker %s\n", topic, broker)
+		
+		err := admin.CreateTopic(topic, topicDetail, false)
+		if err != nil {
+			// If topic already exists, just log and continue
+			if err == sarama.ErrTopicAlreadyExists {
+				fmt.Printf("Topic %s already exists\n", topic)
+				continue
+			}
+			return fmt.Errorf("failed to create topic %s: %v", topic, err)
+		}
+		fmt.Printf("Created topic %s with %d partitions and replication factor %d\n", 
+			topic, numPartitions, replicationFactor)
 	}
+	
 	return nil
 }
 
 func main() {
-	// Create topics if they don't exist
-	for city, cfg := range cityConfigs {
-		if err := createTopicIfNotExist(cfg.Broker, cfg.Topic); err != nil {
-			panic(fmt.Sprintf("Topic creation failed for %s: %v", city, err))
-		}
-	}
-
-	// Initialize Kafka writers
-	writers := make(map[string]*kafka.Writer)
-	for city, cfg := range cityConfigs {
-		writers[city] = &kafka.Writer{
-			Addr:         kafka.TCP(cfg.Broker),
-			Topic:        cfg.Topic,
-			Balancer:     &kafka.LeastBytes{},
-			RequiredAcks: kafka.RequireAll,
-			Async:        false,
-			Transport: &kafka.Transport{
-				DialTimeout: 10 * time.Second,
-			},
-		}
-		defer writers[city].Close()
-	}
-
-	// Handle graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Generate driver locations
+	// Set random seed
 	rand.Seed(time.Now().UnixNano())
+	
+	// Prepare topics list
+	var topics []string
+	for city := range cityBounds {
+		topics = append(topics, fmt.Sprintf("%s-users", city))
+	}
+	
+	// Create topics with 6 partitions and replication factor 1
+	fmt.Println("Creating topics...")
+	if err := createTopics(brokers, topics, 2, 1); err != nil {
+		fmt.Printf("Warning: Topic creation issue: %v\n", err)
+		// Continue execution instead of exiting
+	}
+	
+	// Configure Sarama producer
+	config := sarama.NewConfig()
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Producer.Retry.Max = 5
+	config.Producer.Return.Successes = true
+	config.Net.DialTimeout = 10 * time.Second
+	config.Version = sarama.V3_5_0_0
+	
+	// Set batch configuration for better performance
+	config.Producer.Flush.Frequency = 100 * time.Millisecond
+	config.Producer.Flush.MaxMessages = 10
+
+	// Create a new sync producer
+	producer, err := sarama.NewSyncProducer(brokers, config)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create producer: %v", err))
+	}
+	defer producer.Close()
+
+	// Maintain pool of generated user IDs
+	userPool := generateUserPool(1000) 
+
+	totalMessagesTransmitted := 0
+	startTime := time.Now()
+	
+	// Setup graceful shutdown
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	
+	// Create ticker for message generation
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-
-productionLoop:
-	for {
+	
+	// Create ticker for stats reporting
+	statsTicker := time.NewTicker(5 * time.Second)
+	defer statsTicker.Stop()
+	
+	fmt.Println("Starting to produce user location data...")
+	
+	// Main loop for sending messages
+	running := true
+	for running {
 		select {
 		case <-ticker.C:
-			for city, cfg := range cityConfigs {
-				lat := cfg.MinLat + rand.Float64()*(cfg.MaxLat-cfg.MinLat)
-				lon := cfg.MinLon + rand.Float64()*(cfg.MaxLon-cfg.MinLon)
-
-				msg := DriverLocation{
-					DriverID:    fmt.Sprintf("DRV-%s-%04d", city, rand.Intn(10000)),
+			for city := range cityBounds {
+				// Create location data for a random user
+				loc := UserLocation{
+					UserID:      userPool[rand.Intn(len(userPool))],
 					City:        city,
-					Latitude:    lat,
-					Longitude:   lon,
-					Accuracy:    5 + rand.Float64()*15,
-					Timestamp:   time.Now().UnixMilli(),
-					VehicleType: []string{"sedan", "hatchback", "suv"}[rand.Intn(3)],
+					Latitude:    randomInRange(cityBounds[city][0][0], cityBounds[city][1][0]),
+					Longitude:   randomInRange(cityBounds[city][0][1], cityBounds[city][1][1]),
+					Timestamp:   time.Now().Unix(),
 				}
 
-				value, _ := json.Marshal(msg)
+				// Send the location to Kafka
+				if err := sendToKafka(producer, loc); err != nil {
+					fmt.Printf("Error sending to %s: %v\n", city, err)
+					continue
+				}
 				
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-
-				err := writers[city].WriteMessages(ctx, kafka.Message{
-					Key:   []byte(msg.DriverID),
-					Value: value,
-				})
-
-				if err != nil {
-					fmt.Printf("Failed to write to %s: %v\n", cfg.Topic, err)
-				} else {
-					fmt.Printf("Sent to %s: %s\n", cfg.Topic, msg.DriverID)
-				}
+				totalMessagesTransmitted++
 			}
-
-		case <-sigChan:
-			fmt.Println("\nInitiating graceful shutdown...")
-			break productionLoop
+			
+		case <-statsTicker.C:
+			elapsed := time.Since(startTime).Seconds()
+			rate := float64(totalMessagesTransmitted) / elapsed
+			fmt.Printf("Sent %d messages (%.2f msgs/sec)\n", totalMessagesTransmitted, rate)
+			
+		case sig := <-signals:
+			fmt.Printf("Caught signal %v: terminating\n", sig)
+			running = false
 		}
 	}
-
+	
 	fmt.Println("Producer stopped successfully")
+}
+
+// generateUserPool creates a pool of random user IDs
+func generateUserPool(size int) []string {
+	pool := make([]string, size)
+	for i := 0; i < size; i++ {
+		pool[i] = fmt.Sprintf("%s-%04d%04d",
+			userPrefix[rand.Intn(len(userPrefix))],
+			rand.Intn(10000),
+			rand.Intn(10000),
+		)
+	}
+	return pool
+}
+
+// randomInRange returns a random float64 between min and max
+func randomInRange(min, max float64) float64 {
+	return min + rand.Float64()*(max-min)
+}
+
+// StringPtr returns a pointer to the string value passed in
+func StringPtr(s string) *string {
+	return &s
+}
+
+// sendToKafka sends the user location data to the appropriate Kafka topic
+func sendToKafka(producer sarama.SyncProducer, loc UserLocation) error {
+	jsonData, err := json.Marshal(loc)
+	if err != nil {
+		return fmt.Errorf("marshaling error: %w", err)
+	}
+
+	msg := &sarama.ProducerMessage{
+		Topic: fmt.Sprintf("%s-users", loc.City),
+		Key:   sarama.StringEncoder(loc.UserID), // Added key for partitioning
+		Value: sarama.ByteEncoder(jsonData),
+	}
+
+	_, _, err = producer.SendMessage(msg)
+	return err
 }

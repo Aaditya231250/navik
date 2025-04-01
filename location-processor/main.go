@@ -36,6 +36,8 @@ type DriverLocation struct {
     SK        string `json:"sk" dynamodbav:"SK"`
     GSI1PK    string `json:"gsi1pk" dynamodbav:"GSI1PK"`
     GSI1SK    string `json:"gsi1sk" dynamodbav:"GSI1SK"`
+    GSI2PK    string `json:"gsi2pk" dynamodbav:"GSI2PK"`
+    GSI3PK    string `json:"gsi3pk" dynamodbav:"GSI3PK"`
     DriverID  string `json:"driver_id" dynamodbav:"driver_id"`
     Location  string `json:"location" dynamodbav:"location"`
     H3Res9    string `json:"h3_res9" dynamodbav:"h3_res9"`
@@ -233,6 +235,8 @@ func createTable() error {
             {AttributeName: aws.String("SK"), AttributeType: aws.String("S")},
             {AttributeName: aws.String("GSI1PK"), AttributeType: aws.String("S")},
             {AttributeName: aws.String("GSI1SK"), AttributeType: aws.String("S")},
+            {AttributeName: aws.String("GSI2PK"), AttributeType: aws.String("S")},
+            {AttributeName: aws.String("GSI3PK"), AttributeType: aws.String("S")},
         },
         KeySchema: []*dynamodb.KeySchemaElement{
             {AttributeName: aws.String("PK"), KeyType: aws.String("HASH")},
@@ -244,6 +248,32 @@ func createTable() error {
                 KeySchema: []*dynamodb.KeySchemaElement{
                     {AttributeName: aws.String("GSI1PK"), KeyType: aws.String("HASH")},
                     {AttributeName: aws.String("GSI1SK"), KeyType: aws.String("RANGE")},
+                },
+                Projection: &dynamodb.Projection{
+                    ProjectionType: aws.String("ALL"),
+                },
+                ProvisionedThroughput: &dynamodb.ProvisionedThroughput{
+                    ReadCapacityUnits:  aws.Int64(10),
+                    WriteCapacityUnits: aws.Int64(10),
+                },
+            },
+            {
+                IndexName: aws.String("StatusH3Res8Index"),
+                KeySchema: []*dynamodb.KeySchemaElement{
+                    {AttributeName: aws.String("GSI2PK"), KeyType: aws.String("HASH")},
+                },
+                Projection: &dynamodb.Projection{
+                    ProjectionType: aws.String("ALL"),
+                },
+                ProvisionedThroughput: &dynamodb.ProvisionedThroughput{
+                    ReadCapacityUnits:  aws.Int64(10),
+                    WriteCapacityUnits: aws.Int64(10),
+                },
+            },
+            {
+                IndexName: aws.String("StatusH3Res7Index"),
+                KeySchema: []*dynamodb.KeySchemaElement{
+                    {AttributeName: aws.String("GSI3PK"), KeyType: aws.String("HASH")},
                 },
                 Projection: &dynamodb.Projection{
                     ProjectionType: aws.String("ALL"),
@@ -267,6 +297,7 @@ func createTable() error {
     
     return waitForTableCreation(tableName)
 }
+
 
 func waitForTableCreation(tableName string) error {
     for i := 0; i < 30; i++ {
@@ -333,6 +364,8 @@ func processMessage(msg *kafka.Message) error {
     driverLoc.SK = fmt.Sprintf("DRIVER#%s#%s", loc.DriverID, loc.Status)
     driverLoc.GSI1PK = fmt.Sprintf("%s#H3#9#%s", loc.Status, h3Indexes[0][:5])
     driverLoc.GSI1SK = fmt.Sprintf("TS#%d", driverLoc.UpdatedAt)
+    driverLoc.GSI2PK = fmt.Sprintf("%s#H3#8#%s", loc.Status, h3Indexes[1][:5])
+    driverLoc.GSI3PK = fmt.Sprintf("%s#H3#7#%s", loc.Status, h3Indexes[2][:5])
 
     log.Printf("Generated keys for DriverID %s: PK=%s, SK=%s\n", loc.DriverID, driverLoc.PK, driverLoc.SK)
 

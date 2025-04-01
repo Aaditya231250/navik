@@ -13,10 +13,10 @@ type Location struct {
 	Timestamp   int64   `json:"timestamp"`
 	VehicleType string  `json:"vehicle_type"`
 	Status      string  `json:"status"`
-	PK        string `json:"pk" dynamodbav:"PK"`
 }
 
 type LocationDB struct {
+	PK        string `json:"pk" dynamodbav:"PK"`
 	SK        string `json:"sk" dynamodbav:"SK"`
 	GSI1PK    string `json:"gsi1pk" dynamodbav:"GSI1PK"`
 	GSI1SK    string `json:"gsi1sk" dynamodbav:"GSI1SK"`
@@ -25,10 +25,10 @@ type LocationDB struct {
 	H3Res9    string `json:"h3_res9" dynamodbav:"h3_res9"`
 	H3Res8    string `json:"h3_res8" dynamodbav:"h3_res8"`
 	H3Res7    string `json:"h3_res7" dynamodbav:"h3_res7"`
-	Vehicle   string `json:"vehicle_type" dynamodbav:"vehicle_type"`
-	Status    string `json:"status" dynamodbav:"status"`
-	UpdatedAt int64  `json:"updated_at" dynamodbav:"updated_at"`
-	ExpiresAt int64  `json:"expires_at" dynamodbav:"expires_at"`
+	VehicleType   string `json:"vehicle_type" dynamodbav:"vehicle_type"`
+	Status        string `json:"status" dynamodbav:"status"`
+	UpdatedAt     int64  `json:"updated_at" dynamodbav:"updated_at"`
+	ExpiresAt     int64  `json:"expires_at" dynamodbav:"expires_at"`
 }
 
 func (l *Location) Validate() error {

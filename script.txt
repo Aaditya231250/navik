@@ -262,3 +262,13 @@ volumes:
   dynamodb-data:
 
 
+curl -X POST http://localhost/api/location \
+  -H "Content-Type: application/json" \
+  -d '{
+    "driver_id": "CS-12345678",
+    "city": "mumbai",
+    "latitude": 19.076,
+    "longitude": 72.877,
+    "vehicle_type": "STANDARD",
+    "status": "ACTIVE"
+  }'

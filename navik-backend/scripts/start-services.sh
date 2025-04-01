@@ -28,8 +28,11 @@ sleep 5
 
 
 echo "Starting Location Service..."
+
+
 cd cmd/location-service
-$COMPOSE_CMD up -d
+
+$COMPOSE_CMD up -d --build
 cd ../../
 
 # Start Nginx Gateway

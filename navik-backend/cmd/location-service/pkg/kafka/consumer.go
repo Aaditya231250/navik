@@ -5,94 +5,143 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
+	"sync"
+	"sync/atomic"
+	"time"
 
-	"github.com/IBM/sarama"
 	"location-service/internal/model"
+
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
+type MessageHandler func(loc model.Location) error
+
 type Consumer struct {
-	consumer sarama.ConsumerGroup
-	topics   []string
-	handler  func(model.Location) error
+	consumers         []*kafka.Consumer
+	handler           MessageHandler
+	messagesReceived  *int64
+	messagesProcessed *int64
+	messagesFailed    *int64
 }
 
-func NewConsumer(brokers []string, groupID string, topics []string, handler func(model.Location) error) (*Consumer, error) {
-	config := sarama.NewConfig()
-	config.Consumer.Return.Errors = true
-	config.Version = sarama.V3_5_0_0
+type ClusterConfig struct {
+	Name             string
+	BootstrapServers string
+	Topic            string
+}
 
-	consumer, err := sarama.NewConsumerGroup(brokers, groupID, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create consumer: %w", err)
+func NewConsumer(groupID string, clusters []ClusterConfig, handler MessageHandler,
+	messagesReceived, messagesProcessed, messagesFailed *int64) (*Consumer, error) {
+	consumers := make([]*kafka.Consumer, 0, len(clusters))
+
+	for _, cluster := range clusters {
+		config := &kafka.ConfigMap{
+			"bootstrap.servers":  cluster.BootstrapServers,
+			"group.id":           groupID,
+			"auto.offset.reset":  "earliest",
+			"enable.auto.commit": "false",
+		}
+
+		consumer, err := kafka.NewConsumer(config)
+		if err != nil {
+			// Clean up any previously created consumers
+			for _, c := range consumers {
+				c.Close()
+			}
+			return nil, fmt.Errorf("failed to create consumer for %s: %w", cluster.Name, err)
+		}
+
+		err = consumer.SubscribeTopics([]string{cluster.Topic}, nil)
+		if err != nil {
+			consumer.Close()
+			// Clean up any previously created consumers
+			for _, c := range consumers {
+				c.Close()
+			}
+			return nil, fmt.Errorf("failed to subscribe to topic for %s: %w", cluster.Name, err)
+		}
+
+		log.Printf("[%s] Started consumer for topic %s", cluster.Name, cluster.Topic)
+		consumers = append(consumers, consumer)
 	}
 
 	return &Consumer{
-		consumer: consumer,
-		topics:   topics,
-		handler:  handler,
+		consumers:         consumers,
+		handler:           handler,
+		messagesReceived:  messagesReceived,
+		messagesProcessed: messagesProcessed,
+		messagesFailed:    messagesFailed,
 	}, nil
 }
 
-// Consume starts consuming messages from Kafka
 func (c *Consumer) Consume(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	var wg sync.WaitGroup
 
-	// Handle SIGINT and SIGTERM
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
-
-	// Start consuming in a goroutine
-	go func() {
-		for {
-			if err := c.consumer.Consume(ctx, c.topics, c); err != nil {
-				log.Printf("Error from consumer: %v", err)
-			}
-
-			if ctx.Err() != nil {
-				return
-			}
-		}
-	}()
-
-	<-signals
-	log.Println("Shutting down consumer")
-	return nil
-}
-
-// Close closes the Kafka consumer
-func (c *Consumer) Close() error {
-	return c.consumer.Close()
-}
-
-// Setup is run at the beginning of a new session
-func (c *Consumer) Setup(sarama.ConsumerGroupSession) error {
-	return nil
-}
-
-// Cleanup is run at the end of a session
-func (c *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
-	return nil
-}
-
-// ConsumeClaim is called for each message
-func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for message := range claim.Messages() {
-		var loc model.Location
-		if err := json.Unmarshal(message.Value, &loc); err != nil {
-			log.Printf("Error unmarshaling message: %v", err)
-			continue
-		}
-
-		if err := c.handler(loc); err != nil {
-			log.Printf("Error handling message: %v", err)
-			continue
-		}
-
-		session.MarkMessage(message, "")
+	for i, consumer := range c.consumers {
+		wg.Add(1)
+		go func(id int, consumer *kafka.Consumer) {
+			defer wg.Done()
+			c.consumeMessages(ctx, id, consumer)
+		}(i, consumer)
 	}
+
+	wg.Wait()
 	return nil
+}
+
+func (c *Consumer) consumeMessages(ctx context.Context, id int, consumer *kafka.Consumer) {
+	log.Printf("Starting consumer #%d", id)
+	defer log.Printf("Stopping consumer #%d", id)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			msg, err := consumer.ReadMessage(100 * time.Millisecond)
+			if err != nil {
+				if kafkaErr, ok := err.(kafka.Error); ok && kafkaErr.Code() != kafka.ErrTimedOut {
+					log.Printf("Consumer #%d error: %v", id, err)
+				}
+				continue
+			}
+
+			atomic.AddInt64(c.messagesReceived, 1)
+
+			if err := c.processMessage(msg); err == nil {
+				consumer.CommitMessage(msg)
+				atomic.AddInt64(c.messagesProcessed, 1)
+				log.Printf("Consumer #%d processed message from partition %d, offset %d",
+					id, msg.TopicPartition.Partition, msg.TopicPartition.Offset)
+			} else {
+				atomic.AddInt64(c.messagesFailed, 1)
+				log.Printf("Consumer #%d error processing message from partition %d, offset %d: %v",
+					id, msg.TopicPartition.Partition, msg.TopicPartition.Offset, err)
+
+				// Commit anyway to avoid getting stuck
+				consumer.CommitMessage(msg)
+			}
+		}
+	}
+}
+
+func (c *Consumer) processMessage(msg *kafka.Message) error {
+	var loc model.Location
+
+	if err := json.Unmarshal(msg.Value, &loc); err != nil {
+		log.Printf("Error parsing message: %v. Raw message: %s", err, string(msg.Value))
+		return fmt.Errorf("failed to unmarshal location: %w", err)
+	}
+
+	if err := loc.Validate(); err != nil {
+		return fmt.Errorf("invalid location data: %w", err)
+	}
+
+	return c.handler(loc)
+}
+
+func (c *Consumer) Close() {
+	for _, consumer := range c.consumers {
+		consumer.Close()
+	}
 }

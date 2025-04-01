@@ -53,6 +53,18 @@ type Location struct {
 
 var ddb *dynamodb.DynamoDB
 
+// ddb               *dynamodb.DynamoDB
+// messagesReceived  atomic.Int64
+// messagesProcessed atomic.Int64
+// messagesFailedTotal atomic.Int64
+// ddbWriteAttempts  atomic.Int64
+// ddbWriteSuccesses atomic.Int64
+// ddbWriteFailures  atomic.Int64
+// batchSize         = 25
+// batchInterval     = 1 * time.Second
+// batchMutex        sync.Mutex
+// itemBatches       = make(map[string][]*dynamodb.WriteRequest)
+// batchTimers       = make(map[string]*time.Timer)
 
 func main() {
 	dynamoEndpoint := "http://localhost:8000"

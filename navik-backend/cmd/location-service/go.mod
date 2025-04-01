@@ -5,6 +5,7 @@ go 1.23.7
 require (
 	github.com/IBM/sarama v1.45.1
 	github.com/aws/aws-sdk-go v1.55.6
+	github.com/confluentinc/confluent-kafka-go/v2 v2.8.0
 	github.com/uber/h3-go/v4 v4.2.2
 )
 
@@ -28,5 +29,4 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

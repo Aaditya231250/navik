@@ -1,4 +1,5 @@
 package service
+
 import (
 	"context"
 	"fmt"
@@ -41,5 +42,9 @@ func (s *locationService) UpdateLocation(ctx context.Context, loc model.Location
 }
 
 func (s *locationService) ProcessLocationUpdate(loc model.Location) error {
-	return s.repository.Store(context.Background(), loc)
+	ctx := context.Background()
+	log.Printf("Processing location update for driver %s in %s",
+		loc.DriverID, loc.City)
+
+	return s.repository.Store(ctx, loc)
 }

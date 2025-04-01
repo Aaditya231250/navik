@@ -7,7 +7,7 @@ services:
     working_dir: /home/dynamodblocal
     command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "./data"]
     volumes:
-      - "dynamodb-data:/home/dynamodblocal/data"
+      - "./docker/dynamodb:/home/dynamodblocal/data"
     networks:
       - kafka-network
 

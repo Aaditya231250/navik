@@ -108,6 +108,10 @@ services:
         kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic pune-locations --partitions 2 --replication-factor 3
         kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic delhi-locations --partitions 2 --replication-factor 3
         echo 'Topics created successfully'
+        kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic mumbai-users --partitions 2 --replication-factor 3
+        kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic pune-users --partitions 2 --replication-factor 3
+        kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic delhi-users --partitions 2 --replication-factor 3
+        echo 'Topics created successfully'
       "
     networks:
       - kafka-network

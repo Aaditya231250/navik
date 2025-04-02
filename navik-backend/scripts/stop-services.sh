@@ -24,6 +24,11 @@ cd cmd/location-service
 $COMPOSE_CMD down
 cd ../../
 
+echo "Stopping Matching Service..."
+cd cmd/matching-service
+$COMPOSE_CMD down
+cd ../../
+
 # Stop DynamoDB infrastructure
 echo "Stopping DynamoDB infrastructure..."
 cd deploy/dynamodb

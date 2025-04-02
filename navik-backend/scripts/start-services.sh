@@ -28,14 +28,15 @@ sleep 5
 
 
 echo "Starting Location Service..."
-
-
 cd cmd/location-service
-
 $COMPOSE_CMD up -d --build
 cd ../../
 
-# Start Nginx Gateway
+echo "Starting Matching Service..."
+cd cmd/matching-service
+$COMPOSE_CMD up -d --build
+cd ../../
+
 echo "Starting Nginx Gateway..."
 cd deploy/nginx
 $COMPOSE_CMD up -d

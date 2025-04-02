@@ -1,0 +1,8 @@
+{
+    "version": 1,
+    "replicas": [
+      { "count": 2, "constraints": { "rack": "pune" } },
+      { "count": 1, "constraints": { "rack": "delhi" } }
+    ]
+  }
+  

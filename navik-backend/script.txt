@@ -272,3 +272,16 @@ curl -X POST http://localhost/api/location \
     "vehicle_type": "STANDARD",
     "status": "ACTIVE"
   }'
+
+  curl -v -X POST \
+  http://localhost/api/matching \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "USR-12345678",
+    "city": "delhi",
+    "latitude": 19.076,
+    "longitude": 72.877,
+    "request_type": "RIDE_REQUEST"
+  }'
+
+  curl -v http://localhost/health

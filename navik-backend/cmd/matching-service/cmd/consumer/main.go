@@ -60,6 +60,12 @@ func main() {
 	kafkaConfig := sarama.NewConfig()
 	kafkaConfig.Consumer.Return.Errors = true
 	kafkaConfig.Version = sarama.V2_8_0_0
+	
+	// Set to read from the oldest message when no committed offset exists
+	kafkaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+	
+	// Increase max wait time to batch more messages (optional performance tuning)
+	kafkaConfig.Consumer.MaxWaitTime = 500 * time.Millisecond
 
 	// Create consumer group
 	consumerGroup, err := sarama.NewConsumerGroup(cfg.Kafka.Brokers, cfg.Kafka.GroupID, kafkaConfig)
@@ -67,6 +73,14 @@ func main() {
 		log.Fatalf("Error creating consumer group: %v", err)
 	}
 	defer consumerGroup.Close()
+	
+	// Create error handling channel
+	consumerErrors := make(chan error, 1)
+	go func() {
+		for err := range consumerGroup.Errors() {
+			log.Printf("Consumer group error: %v", err)
+		}
+	}()
 
 	// Setup signal handling for graceful shutdown
 	signals := make(chan os.Signal, 1)
@@ -80,8 +94,20 @@ func main() {
 	// Start consuming in a goroutine
 	go func() {
 		for {
+			log.Printf("Starting consumer for topics: %v", cfg.Kafka.Topics)
+			
 			if err := consumerGroup.Consume(ctx, cfg.Kafka.Topics, handler); err != nil {
+				if err == sarama.ErrClosedConsumerGroup {
+					log.Println("Consumer group has been closed")
+					return
+				}
+				
 				log.Printf("Error from consumer: %v", err)
+				select {
+				case consumerErrors <- err:
+				default:
+				}
+				
 				time.Sleep(5 * time.Second)
 				continue
 			}
@@ -89,12 +115,17 @@ func main() {
 			if ctx.Err() != nil {
 				return
 			}
+			
+			log.Println("Consumer group session ended, rebalancing")
 		}
 	}()
 
-	log.Println("Matching service started. Waiting for user requests...")
+	log.Println("Matching service started. Consuming messages from the beginning of topics...")
 
 	<-signals
 	log.Println("Received termination signal. Shutting down...")
 	cancel()
+	
+	// Wait for all in-flight messages to be processed
+	time.Sleep(2 * time.Second)
 }

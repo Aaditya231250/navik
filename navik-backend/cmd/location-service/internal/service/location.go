@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"location-service/internal/model"
 	"location-service/internal/repository"
@@ -43,6 +44,13 @@ func (s *locationService) UpdateLocation(ctx context.Context, loc model.Location
 
 func (s *locationService) ProcessLocationUpdate(loc model.Location) error {
 	ctx := context.Background()
+
+	if time.Now().Unix()-loc.Timestamp > 300 { // Older than 5 minutes
+		log.Printf("Skipping stale location update for driver %s (%.2f minutes old)",
+			loc.DriverID, float64(time.Now().Unix()-loc.Timestamp)/60)
+		return nil
+	}
+
 	log.Printf("Processing location update for driver %s in %s",
 		loc.DriverID, loc.City)
 

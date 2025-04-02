@@ -11,7 +11,7 @@
     "dynamodb": {
       "endpoint": "http://dynamodb-local:8000",
       "region": "us-west-2",
-      "table_name": "DriverLocations",
+      "table_name": "driver-locations",
       "access_key": "dummy",
       "secret_key": "dummy",
       "disable_ssl": true

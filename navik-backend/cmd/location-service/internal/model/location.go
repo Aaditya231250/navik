@@ -20,6 +20,8 @@ type LocationDB struct {
 	SK        string `json:"sk" dynamodbav:"SK"`
 	GSI1PK    string `json:"gsi1pk" dynamodbav:"GSI1PK"`
 	GSI1SK    string `json:"gsi1sk" dynamodbav:"GSI1SK"`
+	GSI2PK    string `json:"gsi2pk" dynamodbav:"GSI2PK"`
+    GSI3PK    string `json:"gsi3pk" dynamodbav:"GSI3PK"`
 	DriverID  string `json:"driver_id" dynamodbav:"driver_id"`
 	Location  string `json:"location" dynamodbav:"location"`
 	H3Res9    string `json:"h3_res9" dynamodbav:"h3_res9"`

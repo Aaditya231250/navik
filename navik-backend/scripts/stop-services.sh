@@ -1,4 +1,3 @@
-#!/bin/bash
 set -e
 
 # Function to determine which docker compose command to use

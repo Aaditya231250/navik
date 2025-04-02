@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	tableName     = "DriverLocations"
+	tableName     = "driver-locations"
 	locationTTL   = 900
 	batchSize     = 25
 	batchInterval = 1 * time.Second
@@ -90,6 +90,10 @@ func (r *DynamoDBLocationRepository) convertToLocationDB(loc model.Location) (mo
 	locDB.SK = fmt.Sprintf("DRIVER#%s#%s", loc.DriverID, loc.Status)
 	locDB.GSI1PK = fmt.Sprintf("%s#H3#9#%s", loc.Status, h3Indexes[0][:5])
 	locDB.GSI1SK = fmt.Sprintf("TS#%d", locDB.UpdatedAt)
+	locDB.GSI2PK = fmt.Sprintf("%s#H3#8#%s", loc.Status, h3Indexes[1][:5])
+	locDB.GSI3PK = fmt.Sprintf("%s#H3#7#%s", loc.Status, h3Indexes[2][:5])
+
+	log.Printf("Generated keys for DriverID %s: PK=%s, SK=%s\n", locDB.DriverID, locDB.PK, locDB.SK)
 
 	return locDB, nil
 }
@@ -262,6 +266,8 @@ func (r *DynamoDBLocationRepository) createTable() error {
 			{AttributeName: aws.String("SK"), AttributeType: aws.String("S")},
 			{AttributeName: aws.String("GSI1PK"), AttributeType: aws.String("S")},
 			{AttributeName: aws.String("GSI1SK"), AttributeType: aws.String("S")},
+			{AttributeName: aws.String("GSI2PK"), AttributeType: aws.String("S")},
+			{AttributeName: aws.String("GSI3PK"), AttributeType: aws.String("S")},
 		},
 		KeySchema: []*dynamodb.KeySchemaElement{
 			{AttributeName: aws.String("PK"), KeyType: aws.String("HASH")},
@@ -273,6 +279,32 @@ func (r *DynamoDBLocationRepository) createTable() error {
 				KeySchema: []*dynamodb.KeySchemaElement{
 					{AttributeName: aws.String("GSI1PK"), KeyType: aws.String("HASH")},
 					{AttributeName: aws.String("GSI1SK"), KeyType: aws.String("RANGE")},
+				},
+				Projection: &dynamodb.Projection{
+					ProjectionType: aws.String("ALL"),
+				},
+				ProvisionedThroughput: &dynamodb.ProvisionedThroughput{
+					ReadCapacityUnits:  aws.Int64(10),
+					WriteCapacityUnits: aws.Int64(10),
+				},
+			},
+			{
+				IndexName: aws.String("StatusH3Res8Index"),
+				KeySchema: []*dynamodb.KeySchemaElement{
+					{AttributeName: aws.String("GSI2PK"), KeyType: aws.String("HASH")},
+				},
+				Projection: &dynamodb.Projection{
+					ProjectionType: aws.String("ALL"),
+				},
+				ProvisionedThroughput: &dynamodb.ProvisionedThroughput{
+					ReadCapacityUnits:  aws.Int64(10),
+					WriteCapacityUnits: aws.Int64(10),
+				},
+			},
+			{
+				IndexName: aws.String("StatusH3Res7Index"),
+				KeySchema: []*dynamodb.KeySchemaElement{
+					{AttributeName: aws.String("GSI3PK"), KeyType: aws.String("HASH")},
 				},
 				Projection: &dynamodb.Projection{
 					ProjectionType: aws.String("ALL"),

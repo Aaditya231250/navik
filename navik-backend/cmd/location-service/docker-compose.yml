@@ -1,0 +1,41 @@
+version: '3'
+
+services:
+  producer:
+    build:
+      context: .
+      dockerfile: producer.Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: location-producer
+    environment:
+      - KAFKA_BROKERS=kafka-mumbai:29092,kafka-pune:29092,kafka-delhi:29092
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    networks:
+      - kafka-network
+
+  consumer:
+    build:
+      context: .
+      dockerfile: consumer.Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: location-consumer
+    environment:
+      - KAFKA_BROKERS=kafka-mumbai:29092,kafka-pune:29092,kafka-delhi:29092
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    networks:
+      - kafka-network
+
+networks:
+  kafka-network:
+    external: true
+    name: kafka-network

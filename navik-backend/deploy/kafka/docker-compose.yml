@@ -1,0 +1,137 @@
+services:
+  kafka-mumbai:
+    image: confluentinc/cp-kafka:7.5.1
+    container_name: kafka-mumbai
+    # ports:
+    #   - "29092:29092"  # Internal broker communication
+    #   - "9093:9093"    # Controller port
+    #   - "9101:9101"    # External client access
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-mumbai:9093,2@kafka-pune:9093,3@kafka-delhi:9093"
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9101
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-mumbai:29092,EXTERNAL://localhost:9101
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      CLUSTER_ID: "XxLmcxwkQpieZydFQPRnzw"
+    volumes:
+      - kafka-mumbai-data:/var/lib/kafka/data
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka-mumbai:29092 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  kafka-pune:
+    image: confluentinc/cp-kafka:7.5.1
+    container_name: kafka-pune
+    # ports:
+    #   - "29093:29092"  # Internal broker communication
+    #   - "9095:9093"    # Controller port
+    #   - "9102:9102"    # External client access
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-mumbai:9093,2@kafka-pune:9093,3@kafka-delhi:9093"
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9102
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-pune:29092,EXTERNAL://localhost:9102
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      CLUSTER_ID: "XxLmcxwkQpieZydFQPRnzw"
+    volumes:
+      - kafka-pune-data:/var/lib/kafka/data
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka-pune:29092 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  kafka-delhi:
+    image: confluentinc/cp-kafka:7.5.1
+    container_name: kafka-delhi
+    # ports:
+    #   - "29094:29092"  # Internal broker communication
+    #   - "9097:9093"    # Controller port
+    #   - "9103:9103"    # External client access
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_NODE_ID: 3
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-mumbai:9093,2@kafka-pune:9093,3@kafka-delhi:9093"
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9103
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-delhi:29092,EXTERNAL://localhost:9103
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      CLUSTER_ID: "XxLmcxwkQpieZydFQPRnzw"
+    volumes:
+      - kafka-delhi-data:/var/lib/kafka/data
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka-delhi:29092 --list"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.1
+    container_name: kafka-init
+    depends_on:
+      - kafka-mumbai
+    volumes:
+      - ./scripts:/scripts
+    command: >
+      bash -c "
+        echo 'Waiting for Kafka to be ready...'
+        sleep 45
+        echo 'Creating Kafka topics...'
+        kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic mumbai-locations --partitions 2 --replication-factor 3
+        kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic pune-locations --partitions 2 --replication-factor 3
+        kafka-topics --bootstrap-server kafka-mumbai:29092 --create --if-not-exists --topic delhi-locations --partitions 2 --replication-factor 3
+        echo 'Topics created successfully'
+      "
+    networks:
+      - kafka-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      kafka-mumbai:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: multi-region-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka-mumbai:29092,kafka-pune:29092,kafka-delhi:29092"
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: PLAINTEXT
+      SERVER_SERVLET_CONTEXT_PATH: /kafka-ui 
+    networks:
+      - kafka-network
+
+networks:
+  kafka-network:
+    name: kafka-network
+    driver: bridge
+
+volumes:
+  kafka-mumbai-data:
+  kafka-pune-data:
+  kafka-delhi-data:

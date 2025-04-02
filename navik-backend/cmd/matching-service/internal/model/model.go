@@ -35,3 +35,46 @@ func (l *UserLocation) Validate() error {
 
 	return nil
 }
+
+type EnrichedUserLocation struct {
+	UserLocation
+	H3Index9 string
+	H3Index8 string
+	H3Index7 string
+}
+
+// DriverLocation represents a driver's location from the database
+type DriverLocation struct {
+	// Base driver information
+	DriverID    string    `json:"driver_id" dynamodbav:"DriverID"`
+	Latitude    float64   `json:"latitude"`
+	Longitude   float64   `json:"longitude"`
+	Location    string    `json:"location" dynamodbav:"Location"`
+	VehicleType string    `json:"vehicle_type" dynamodbav:"Vehicle"`
+	Status      string    `json:"status" dynamodbav:"Status"`
+	LastUpdated time.Time `json:"last_updated"`
+	
+	// H3 indices at different resolutions
+	H3Res9      string    `json:"h3_res9" dynamodbav:"H3Res9"`
+	H3Res8      string    `json:"h3_res8" dynamodbav:"H3Res8"`
+	H3Res7      string    `json:"h3_res7" dynamodbav:"H3Res7"`
+	
+	// Matching-related fields (not stored in DB)
+	Distance    float64   `json:"distance,omitempty"`
+	ETA         int       `json:"eta_minutes,omitempty"`
+}
+
+// DriverResponse represents the formatted response to send back to the user
+type DriverResponse struct {
+	UserID      string       `json:"user_id"`
+	RequestTime int64        `json:"request_time"`
+	Drivers     []DriverInfo `json:"drivers"`
+	Status      string       `json:"status"`
+}
+
+type DriverInfo struct {
+	DriverID    string  `json:"driver_id"`
+	VehicleType string  `json:"vehicle_type"`
+	Distance    float64 `json:"distance_km"`
+	ETA         int     `json:"eta_minutes"`
+}

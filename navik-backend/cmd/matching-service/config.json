@@ -7,6 +7,18 @@
     },
     "server": {
       "port": 7979
+    },
+    "dynamodb": {
+      "endpoint": "http://dynamodb-local:8000",
+      "region": "us-west-2",
+      "table_name": "DriverLocations",
+      "access_key": "dummy",
+      "secret_key": "dummy",
+      "disable_ssl": true
+    },
+    "matching": {
+      "min_drivers_to_return": 5,
+      "max_distance_km": 10.0
     }
   }
   

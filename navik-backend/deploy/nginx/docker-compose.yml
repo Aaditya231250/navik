@@ -2,21 +2,14 @@ version: '3'
 
 services:
   nginx-gateway:
-<<<<<<< HEAD
     image: openresty/openresty:alpine
-=======
-    image: nginx:alpine
->>>>>>> 720ad3a7fd4ab94599ce281188b9e314051f2832
     container_name: nginx-gateway
     ports:
       - "80:80"
     volumes:
       - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./config/conf.d:/etc/nginx/conf.d:ro
-<<<<<<< HEAD
       - ./config/lua:/etc/nginx/lua:ro
-=======
->>>>>>> 720ad3a7fd4ab94599ce281188b9e314051f2832
     networks:
       - kafka-network
     restart: always

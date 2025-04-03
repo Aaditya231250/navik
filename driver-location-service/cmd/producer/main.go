@@ -68,7 +68,6 @@ func loadConfig(filename string) error {
 	return nil
 }
 
-
 func handleLocationUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -94,7 +93,7 @@ func handleLocationUpdate(w http.ResponseWriter, r *http.Request) {
 
 	// Send to Kafka
 	log.Printf("Received location update: %+v", loc)
-	if err := producer.SendLocation(loc); err != nil {
+	if err := producer.SendToProducer(loc); err != nil {
 		log.Printf("Error sending to Kafka: %v", err)
 		http.Error(w, "Failed to process location update", http.StatusInternalServerError)
 		return

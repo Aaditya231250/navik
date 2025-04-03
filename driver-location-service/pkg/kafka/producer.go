@@ -1,12 +1,13 @@
 package kafka
 
 import (
+	"driver-location-service/internal/model"
 	"encoding/json"
 	"fmt"
-	"time"
 	"log"
+	"time"
+
 	"github.com/IBM/sarama"
-	"driver-location-service/internal/model"
 )
 
 type Producer struct {
@@ -38,7 +39,7 @@ func (p *Producer) Close() error {
 	return p.producer.Close()
 }
 
-func (p *Producer) SendLocation(loc model.Location) error {
+func (p *Producer) SendToProducer(loc model.Location) error {
 	jsonData, err := json.Marshal(loc)
 	if err != nil {
 		return fmt.Errorf("marshaling error: %w", err)

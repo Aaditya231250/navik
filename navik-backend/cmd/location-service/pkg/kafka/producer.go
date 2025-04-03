@@ -3,7 +3,6 @@ package kafka
 import (
 	"encoding/json"
 	"fmt"
-	"location-service/internal/model"
 	"log"
 	"time"
 
@@ -48,16 +47,21 @@ func (p *Producer) Close() error {
 	return p.producer.Close()
 }
 
-func (p *Producer) SendLocation(loc model.Location) error {
-	jsonData, err := json.Marshal(loc)
+func (p *Producer) SendToProducer(data interface{}, topicKey string, messageKey string) error {
+	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshaling error: %w", err)
 	}
 
-	topic := fmt.Sprintf(p.topicFmt, loc.City)
+	topic := fmt.Sprintf(p.topicFmt, topicKey)
 	msg := &sarama.ProducerMessage{
 		Topic: topic,
 		Value: sarama.ByteEncoder(jsonData),
+	}
+
+	// Set the message key only if it's not empty
+	if messageKey != "" {
+		msg.Key = sarama.StringEncoder(messageKey)
 	}
 
 	_, _, err = p.producer.SendMessage(msg)

@@ -29,7 +29,7 @@ func (s *locationService) UpdateLocation(ctx context.Context, loc model.UserLoca
 	}
 
 	if s.producer != nil {
-		if err := s.producer.SendLocation(loc); err != nil {
+		if err := s.producer.SendToProducer(loc, loc.City, loc.UserID); err != nil {
 			log.Printf("Warning: Failed to publish location to Kafka: %v", err)
 			return fmt.Errorf("failed to publish location: %w", err)
 		}

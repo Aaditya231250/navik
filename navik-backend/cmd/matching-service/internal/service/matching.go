@@ -13,7 +13,6 @@ import (
 	"matching-service/internal/util"
 )
 
-// MatchingService defines the interface for the matching service
 type MatchingService interface {
 	ProcessUserLocation(ctx context.Context, loc model.UserLocation) error
 }
@@ -70,7 +69,7 @@ func (s *matchingService) enrichUserLocation(loc model.UserLocation) model.Enric
 	}
 }
 
-// findDriversForUser implements the matching algorithm to find drivers for a user
+
 func (s *matchingService) findDriversForUser(ctx context.Context, user model.EnrichedUserLocation) ([]model.DriverLocation, error) {
 	// Step 1: Try to find drivers in the exact H9 cell
 	drivers, err := s.repository.FindDriversInH9Cell(ctx, user.H3Index9)
@@ -119,10 +118,8 @@ func (s *matchingService) findDriversForUser(ctx context.Context, user model.Enr
 	// Filter out drivers we already found in H9 cells to avoid duplicates
 	h8Drivers = s.filterOutDuplicateDrivers(h8Drivers, allDrivers)
 
-	// Combine with drivers from H9 cells
 	allDrivers = append(allDrivers, h8Drivers...)
 
-	// If we found enough drivers, rank and return them
 	if len(allDrivers) >= s.minDriversToReturn {
 		rankedDrivers := s.assignRandomDistances(allDrivers)
 		return s.getTopDrivers(rankedDrivers, s.minDriversToReturn), nil
@@ -161,13 +158,10 @@ func (s *matchingService) findDriversForUser(ctx context.Context, user model.Enr
 
 	log.Printf("Found %d drivers in H7 cell", len(h7Drivers))
 
-	// Filter out drivers we already found to avoid duplicates
 	h7Drivers = s.filterOutDuplicateDrivers(h7Drivers, allDrivers)
 
-	// Combine with all previous drivers
 	allDrivers = append(allDrivers, h7Drivers...)
 
-	// If we found enough drivers, rank and return them
 	if len(allDrivers) >= s.minDriversToReturn {
 		rankedDrivers := s.assignRandomDistances(allDrivers)
 		return s.getTopDrivers(rankedDrivers, s.minDriversToReturn), nil

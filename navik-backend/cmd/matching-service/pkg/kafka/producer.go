@@ -6,8 +6,6 @@ import (
 	"log"
 	"time"
 
-	"matching-service/internal/model"
-
 	"github.com/IBM/sarama"
 )
 
@@ -33,7 +31,7 @@ func NewProducer(brokers []string, topicFmt string) (*Producer, error) {
 		log.Printf("Error connecting to configured brokers: %v", err)
 		log.Printf("Attempting to connect to localhost fallback...")
 
-		fallbackBrokers := []string{"localhost:9092"}
+		fallbackBrokers := []string{"kafka-pune:29092"}
 		producer, err = sarama.NewSyncProducer(fallbackBrokers, config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create producer with all broker options: %w", err)
@@ -54,17 +52,21 @@ func (p *Producer) Close() error {
 	return p.producer.Close()
 }
 
-func (p *Producer) SendLocation(loc model.UserLocation) error {
-	jsonData, err := json.Marshal(loc)
+func (p *Producer) SendToProducer(data interface{}, topicKey string, messageKey string) error {
+	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshaling error: %w", err)
 	}
 
-	topic := fmt.Sprintf(p.topicFmt, loc.City)
+	topic := fmt.Sprintf(p.topicFmt, topicKey)
 	msg := &sarama.ProducerMessage{
 		Topic: topic,
-		Key:   sarama.StringEncoder(loc.UserID),
 		Value: sarama.ByteEncoder(jsonData),
+	}
+
+	// Set the message key only if it's not empty
+	if messageKey != "" {
+		msg.Key = sarama.StringEncoder(messageKey)
 	}
 
 	_, _, err = p.producer.SendMessage(msg)

@@ -10,8 +10,11 @@ services:
       - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./config/conf.d:/etc/nginx/conf.d:ro
       - ./config/lua:/etc/nginx/lua:ro
+      - ./config/includes:/etc/nginx/includes:ro
+    
     networks:
       - kafka-network
+      - map-network
     restart: always
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/health"]
@@ -24,3 +27,6 @@ networks:
   kafka-network:
     external: true
     name: kafka-network
+  map-network:
+    external: true
+    name: map-network

@@ -23,7 +23,12 @@ cd deploy/dynamodb
 $COMPOSE_CMD up -d
 cd ../../
 
-echo "Waiting for Kafka to stablise..."
+echo "Starting Map infrastructure..."
+cd cmd/maps
+$COMPOSE_CMD up -d --build
+cd ../../
+
+echo "Waiting for 5sec to stablise..."
 sleep 5
 
 

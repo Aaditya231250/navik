@@ -1,0 +1,24 @@
+version: '3'
+
+services:
+  map-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: map-service
+    networks:
+      - map-network
+    restart: always
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+networks:
+  map-network:
+    name: map-network
+    driver: bridge

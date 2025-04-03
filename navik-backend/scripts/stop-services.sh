@@ -24,6 +24,12 @@ cd cmd/location-service
 $COMPOSE_CMD down
 cd ../../
 
+# Stop Location Service
+echo "Stopping Map Service..."
+cd cmd/maps
+$COMPOSE_CMD down
+cd ../../
+
 echo "Stopping Matching Service..."
 cd cmd/matching-service
 $COMPOSE_CMD down

@@ -27,3 +27,5 @@ vendor/
 Thumbs.db
 
 *.db
+
+.env

@@ -31,6 +31,10 @@ cd ../../
 echo "Waiting for 5sec to stablise..."
 sleep 5
 
+echo "Starting Auth infrastructure..."
+cd cmd/authentication
+$COMPOSE_CMD up -d --build
+cd ../../
 
 echo "Starting Location Service..."
 cd cmd/location-service

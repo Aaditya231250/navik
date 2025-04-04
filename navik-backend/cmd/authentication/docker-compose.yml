@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+  authentication-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    container_name: authentication-service
+    networks:
+      - kafka-network
+    restart: always
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://dynamodb-local:8000" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+      
+networks:
+  kafka-network:
+    external: true
+    name: kafka-network

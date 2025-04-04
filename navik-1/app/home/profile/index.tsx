@@ -1,6 +1,12 @@
-// app/home/profile/index.tsx
 import React from "react";
-import { View, Text, Image, TouchableOpacity, SafeAreaView } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StatusBar,
+  Platform,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
 
@@ -8,7 +14,13 @@ export default function ProfileScreen() {
   const router = useRouter();
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "#fff",
+        marginTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+      }}
+    >
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200">
         <Text className="text-xl font-bold">Profile</Text>
@@ -20,7 +32,7 @@ export default function ProfileScreen() {
       {/* Profile Section */}
       <View className="items-center mt-6">
         <Image
-          source={require("@/assets/images/profile-avatar.jpeg")} // Add your avatar image in assets/images
+          source={require("@/assets/images/profile-avatar.jpeg")}
           className="w-24 h-24 rounded-full"
         />
         <Text className="text-lg font-semibold mt-4">John Doe</Text>
@@ -56,6 +68,6 @@ export default function ProfileScreen() {
           <MaterialIcons name="logout" size={24} color="#d9534f" />
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

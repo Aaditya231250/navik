@@ -1,14 +1,20 @@
-// app/ride-details/index.tsx
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Image, FlatList, SafeAreaView } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  FlatList,
+  SafeAreaView,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
+import MapView, { Marker } from "react-native-maps";
 
 export default function RideDetailsScreen() {
   const router = useRouter();
   const [selectedRide, setSelectedRide] = useState(null);
 
-  // Sample ride options
   const rideOptions = [
     {
       id: "uber-go",
@@ -55,33 +61,45 @@ export default function RideDetailsScreen() {
       <View className="items-end">
         <Text className="text-lg font-bold">{item.price}</Text>
         {item.oldPrice && (
-          <Text className="text-sm text-gray-400 line-through">{item.oldPrice}</Text>
+          <Text className="text-sm text-gray-400 line-through">
+            {item.oldPrice}
+          </Text>
         )}
       </View>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      {/* Map Section */}
-      <View className="flex-1">
-        {/* Back Button */}
-        <TouchableOpacity
-          onPress={() => router.back()}
-          className="absolute top-6 left-4 z-10 bg-white p-2 rounded-full shadow"
-        >
-          <MaterialIcons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
+    <View className="flex-1">
+      {/* Full Screen Map */}
+      <MapView
+        style={{ flex: 1 }}
+        initialRegion={{
+          latitude: 26.4753,
+          longitude: 73.1149,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+      >
+        <Marker
+          coordinate={{ latitude: 26.4753, longitude: 73.1149 }}
+          title="IIT Jodhpur"
+          description="Indian Institute of Technology, Jodhpur"
+        />
+      </MapView>
 
-        {/* Map Placeholder */}
-        <View className="flex-1 bg-gray-200 justify-center items-center">
-          <Text>Map Placeholder</Text>
-        </View>
-      </View>
+      {/* Back Button */}
+      <TouchableOpacity
+        onPress={() => router.back()}
+        className="absolute top-6 left-4 z-10 bg-white p-2 rounded-full shadow"
+      >
+        <MaterialIcons name="arrow-back" size={24} color="#000" />
+      </TouchableOpacity>
 
-      {/* Ride Options */}
-      <View className="bg-white rounded-t-lg shadow-lg p-4">
+      {/* Ride Options Overlay */}
+      <View className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4 shadow-lg">
         <Text className="text-xl font-bold mb-4">Choose a trip</Text>
+
         <FlatList
           data={rideOptions}
           renderItem={renderRideOption}
@@ -89,13 +107,15 @@ export default function RideDetailsScreen() {
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         />
 
-        {/* Payment Section */}
+        {/* Payment Option */}
         <TouchableOpacity
           onPress={() => {}}
           className="flex-row items-center justify-between mt-6 px-4 py-3 bg-gray-100 rounded-lg"
         >
           <MaterialIcons name="payment" size={24} color="#000" />
-          <Text className="text-gray-700 flex-grow ml-2">user.name@okhdfcbank</Text>
+          <Text className="text-gray-700 flex-grow ml-2">
+            user.name@okhdfcbank
+          </Text>
           <MaterialIcons name="keyboard-arrow-right" size={24} color="#000" />
         </TouchableOpacity>
 
@@ -108,10 +128,14 @@ export default function RideDetailsScreen() {
           }`}
         >
           <Text className="text-white text-center text-lg font-semibold">
-            {selectedRide ? `Choose ${rideOptions.find((r) => r.id === selectedRide)?.name}` : "Select a Ride"}
+            {selectedRide
+              ? `Choose ${
+                  rideOptions.find((r) => r.id === selectedRide)?.name
+                }`
+              : "Select a Ride"}
           </Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

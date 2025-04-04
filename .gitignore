@@ -5,6 +5,8 @@
 *.so
 *.dylib
 
+node_modules/
+
 # Test binaries, built with 'go test -c'
 *.test
 

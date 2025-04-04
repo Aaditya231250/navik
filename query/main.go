@@ -14,6 +14,7 @@ import (
     "sort"
     "strings"
 	"strconv"
+    "github.com/gorilla/websocket"
 	"github.com/IBM/sarama"
 	"github.com/uber/h3-go/v3"
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,6 +22,20 @@ import (
     "github.com/aws/aws-sdk-go/aws/session"
     "github.com/aws/aws-sdk-go/service/dynamodb"
 )
+
+// DriverNotification represents a notification to be sent to a driver
+type DriverNotification struct {
+	Type        string  `json:"type"`
+	UserID      string  `json:"user_id"`
+	DriverID    string  `json:"driver_id"`
+	Priority    int     `json:"priority"`
+	PickupLat   float64 `json:"pickup_lat"`
+	PickupLong  float64 `json:"pickup_long"`
+	Distance    float64 `json:"distance_km"`
+	ETA         int     `json:"eta_minutes"`
+	RequestTime int64   `json:"request_time"`
+	ExpiresAt   int64   `json:"expires_at"`
+}
 
 // UserLocation represents a user's location data from Kafka
 type UserLocation struct {
@@ -109,6 +124,9 @@ var (
     // batchTimers       = make(map[string]*time.Timer)
 	MinDriversToReturn = 5
     MaxDistanceKm      = 10.0
+    notificationConn *websocket.Conn
+    notificationMutex sync.Mutex
+    isConnected bool = false
 )
 
 // Initialize random seed
@@ -838,8 +856,6 @@ func formatDriverResponse(user EnrichedUserLocation, drivers []DriverLocation) D
 func processMatchingResults(user EnrichedUserLocation, drivers []DriverLocation) {
     if len(drivers) == 0 {
         log.Printf("No drivers available for user %s", user.UserID)
-        // In a real application, you would send a response to the user
-        // indicating no drivers are available
         return
     }
     
@@ -847,8 +863,105 @@ func processMatchingResults(user EnrichedUserLocation, drivers []DriverLocation)
     
     // Format response for the user
     response := formatDriverResponse(user, drivers)
+
+    if(response.Status == "NO_DRIVERS_AVAILABLE") {
+        log.Printf("No drivers available for user %s", user.UserID)
+        return
+    }
+
+    // Ensure we're connected to notification service
+    if err := connectToNotificationService(); err != nil {
+        log.Printf("Failed to connect to notification service: %v", err)
+        return
+    }
     
-    // In a real application, you would send this response back to the user
-    // For now, just log it
-    log.Printf("Response for user %s: %+v", user.UserID, response)
+    // Prepare driver notifications
+    notifications := make([]DriverNotification, len(drivers))
+    for i, driver := range drivers {
+        notifications[i] = DriverNotification{
+            Type:        "RIDE_REQUEST",
+            UserID:      user.UserID,
+            DriverID:    driver.DriverID,
+            Priority:    i + 1, // Priority based on ranking
+            PickupLat:   user.Latitude,
+            PickupLong:  user.Longitude,
+            Distance:    driver.Distance,
+            ETA:         driver.ETA,
+            RequestTime: time.Now().Unix(),
+            ExpiresAt:   time.Now().Add(30 * time.Second).Unix(), // Driver has 30s to respond
+        }
+    }
+    
+    // Send notifications to notification service
+    notificationMutex.Lock()
+    defer notificationMutex.Unlock()
+    
+    if !isConnected {
+        log.Printf("Not connected to notification service")
+        return
+    }
+    
+    notificationJSON, err := json.Marshal(notifications)
+    if err != nil {
+        log.Printf("Error marshaling notifications: %v", err)
+        return
+    }
+    
+    if err := notificationConn.WriteMessage(websocket.TextMessage, notificationJSON); err != nil {
+        log.Printf("Error sending notifications: %v", err)
+        isConnected = false
+        return
+    }
+    
+    log.Printf("Sent %d driver notifications for user %s", len(notifications), user.UserID)
+}
+
+func connectToNotificationService() error {
+    notificationMutex.Lock()
+    defer notificationMutex.Unlock()
+    
+    if isConnected {
+        return nil
+    }
+    
+    dialer := websocket.Dialer{
+        HandshakeTimeout: 5 * time.Second,
+    }
+    
+    conn, _, err := dialer.Dial("ws://notification-service:9080/ws/matching", nil)
+    if err != nil {
+        return fmt.Errorf("failed to connect to notification service: %w", err)
+    }
+    
+    notificationConn = conn
+    isConnected = true
+    
+    // Start a goroutine to handle connection lifecycle
+    go func() {
+        defer func() {
+            notificationMutex.Lock()
+            notificationConn.Close()
+            notificationConn = nil
+            isConnected = false
+            notificationMutex.Unlock()
+        }()
+        
+        for {
+            // Read messages (acknowledgments, etc.)
+            _, _, err := conn.ReadMessage()
+            if err != nil {
+                log.Printf("Notification service connection closed: %v", err)
+                break
+            }
+        }
+        
+        // Attempt to reconnect after a delay
+        time.Sleep(5 * time.Second)
+        if err := connectToNotificationService(); err != nil {
+            log.Printf("Failed to reconnect to notification service: %v", err)
+        }
+    }()
+    
+    log.Println("Connected to notification service")
+    return nil
 }

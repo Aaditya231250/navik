@@ -31,7 +31,6 @@ export default function RootLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="home" />
       <Stack.Screen name="plan-ride" />
-      <Stack.Screen name="ride-details" />
     </Stack>
     </GestureHandlerRootView>
   );

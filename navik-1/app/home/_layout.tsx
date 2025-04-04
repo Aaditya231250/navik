@@ -4,6 +4,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import HomeScreen from "./index";
 import ServicesScreen from "./services/index";
 import ActivityScreen from "./activity/index";
+import ProfileScreen from "./profile/index"; // Import the Profile component
 
 const Tab = createBottomTabNavigator();
 
@@ -40,7 +41,7 @@ export default function HomeLayout() {
           ),
         }}
       />
-      <Tab.Screen
+      {/* <Tab.Screen
         name="Services"
         component={ServicesScreen}
         options={{
@@ -49,7 +50,7 @@ export default function HomeLayout() {
             <MaterialIcons name="directions-car" size={28} color={color} />
           ),
         }}
-      />
+      /> */}
       <Tab.Screen
         name="Activity"
         component={ActivityScreen}
@@ -57,6 +58,16 @@ export default function HomeLayout() {
           tabBarLabel: "Activity",
           tabBarIcon: ({ color }) => (
             <MaterialIcons name="history" size={28} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarLabel: "Profile",
+          tabBarIcon: ({ color }) => (
+            <MaterialIcons name="person" size={28} color={color} />
           ),
         }}
       />

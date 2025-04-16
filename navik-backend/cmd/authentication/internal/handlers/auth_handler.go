@@ -1,4 +1,3 @@
-// internal/handlers/auth_handler.go
 package handlers
 
 import (
@@ -26,17 +25,14 @@ func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 	}
 }
 
-// Register handles user registration (both customer and driver)
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req domain.Registration
 
-	// Parse request body
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 
-	// Validate request
 	if err := h.validate.Struct(req); err != nil {
 		validationErrors := err.(validator.ValidationErrors)
 		respondWithError(w, http.StatusBadRequest, formatValidationErrors(validationErrors))
@@ -48,7 +44,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		err      error
 	)
 
-	// Register based on user type
 	switch req.UserType {
 	case domain.UserTypeCustomer:
 		authResp, err = h.authService.RegisterCustomer(r.Context(), req)
@@ -60,7 +55,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		// Handle specific errors
 		switch {
 		case errors.Is(err, errors.New("email already exists")):
 			respondWithError(w, http.StatusConflict, "Email already in use")
@@ -70,28 +64,23 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return success response with tokens
 	respondWithJSON(w, http.StatusCreated, authResp)
 }
 
-// Login handles user authentication
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req domain.Login
 
-	// Parse request body
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 
-	// Validate request
 	if err := h.validate.Struct(req); err != nil {
 		validationErrors := err.(validator.ValidationErrors)
 		respondWithError(w, http.StatusBadRequest, formatValidationErrors(validationErrors))
 		return
 	}
 
-	// Authenticate user
 	authResp, err := h.authService.Login(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidCredentials) {
@@ -102,13 +91,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return success response with tokens
 	respondWithJSON(w, http.StatusOK, authResp)
 }
 
-// RefreshToken handles token refresh requests
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	// Extract refresh token from request
 	var reqBody struct {
 		RefreshToken string `json:"refresh_token"`
 	}
@@ -139,8 +125,6 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	authResp, err := h.authService.RefreshToken(r.Context(), refreshToken)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
-
-		// Handle specific errors
 		switch {
 		case errors.Is(err, service.ErrInvalidToken):
 			statusCode = http.StatusUnauthorized
@@ -152,28 +136,23 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return success response with new tokens
 	respondWithJSON(w, http.StatusOK, authResp)
 }
 
-// RequestPasswordReset handles password reset requests
 func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
 	var req domain.PasswordReset
 
-	// Parse request body
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 
-	// Validate request
 	if err := h.validate.StructPartial(req, "Email"); err != nil {
 		validationErrors := err.(validator.ValidationErrors)
 		respondWithError(w, http.StatusBadRequest, formatValidationErrors(validationErrors))
 		return
 	}
 
-	// Request password reset
 	_, err := h.authService.RequestPasswordReset(r.Context(), req.Email)
 	if err != nil {
 		// Don't expose details of failure, just return a generic message
@@ -181,13 +160,11 @@ func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Always return success to prevent email enumeration
 	respondWithJSON(w, http.StatusOK, map[string]string{
 		"message": "If your email exists in our system, you will receive password reset instructions",
 	})
 }
 
-// Helper functions
 func respondWithError(w http.ResponseWriter, code int, message string) {
 	respondWithJSON(w, code, map[string]string{"error": message})
 }

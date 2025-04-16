@@ -1,4 +1,3 @@
-// internal/repository/dynamodb_setup.go
 package repository
 
 import (
@@ -12,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-// CreateUsersTable creates the users table if it doesn't exist
 func CreateUsersTable(ctx context.Context, client *dynamodb.Client, tableName string) error {
 	log.Printf("Checking if table %s exists...", tableName)
 	

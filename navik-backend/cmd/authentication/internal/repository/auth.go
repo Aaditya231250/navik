@@ -107,7 +107,6 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 	return &user, nil
 }
 
-// GetUserByID retrieves a user by ID
 func (r *UserRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
 	// Get item from DynamoDB
 	result, err := r.client.GetItem(ctx, &dynamodb.GetItemInput{
@@ -124,7 +123,6 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 		return nil, ErrUserNotFound
 	}
 
-	// Unmarshal the item to a User struct
 	var user domain.User
 	err = attributevalue.UnmarshalMap(result.Item, &user)
 	if err != nil {
@@ -401,11 +399,9 @@ func (r *UserRepository) UpdateDriverProfile(ctx context.Context, id string, upd
         return errors.New("user is not a driver")
     }
     
-    // Build update expression
     updateExpr := expression.UpdateBuilder{}
     updateExpr = updateExpr.Set(expression.Name("updated_at"), expression.Value(time.Now()))
     
-    // Add fields to update
     if update.FirstName != "" {
         updateExpr = updateExpr.Set(expression.Name("first_name"), expression.Value(update.FirstName))
     }
@@ -430,13 +426,11 @@ func (r *UserRepository) UpdateDriverProfile(ctx context.Context, id string, upd
         updateExpr = updateExpr.Set(expression.Name("license_expiry"), expression.Value(update.LicenseExpiry))
     }
     
-    // Build expression
     expr, err := expression.NewBuilder().WithUpdate(updateExpr).Build()
     if err != nil {
         return err
     }
     
-    // Update item
     _, err = r.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
         TableName: aws.String(r.tableName),
         Key: map[string]types.AttributeValue{

@@ -24,10 +24,8 @@ import (
 )
 
 func main() {
-	// Load configuration
 	cfg := config.LoadConfig()
 
-	// Configure AWS with static credentials
 	awsCfg, err := awsconfig.LoadDefaultConfig(
 		context.TODO(),
 		awsconfig.WithRegion(cfg.AWSRegion),
@@ -41,10 +39,8 @@ func main() {
 		log.Fatalf("unable to load AWS SDK config, %v", err)
 	}
 
-	// Configure DynamoDB client for local development
 	var dynamoClient *dynamodb.Client
 	if cfg.DynamoDBEndpoint != "" {
-		// Use custom endpoint for local development
 		dynamoClient = dynamodb.NewFromConfig(awsCfg, func(o *dynamodb.Options) {
 			o.EndpointResolver = dynamodb.EndpointResolverFunc(
 				func(region string, options dynamodb.EndpointResolverOptions) (aws.Endpoint, error) {
@@ -60,32 +56,35 @@ func main() {
 		dynamoClient = dynamodb.NewFromConfig(awsCfg)
 	}
 
-	// Create DynamoDB table if it doesn't exist
 	err = repository.CreateUsersTable(context.Background(), dynamoClient, cfg.DynamoDBTableName)
 	if err != nil {
 		log.Fatalf("failed to create users table: %v", err)
 	}
 
-	// Initialize repository
 	userRepo := repository.NewUserRepository(dynamoClient, cfg.DynamoDBTableName)
+
+	redisConfig := service.RedisConfig{
+		Addr:     "redis:6379",
+		Password: "",
+		DB:       0,
+		Enabled:  true,
+	}
 
 	// Initialize services
 	jwtConfig := service.JWTConfig{
-		AccessTokenSecret:  cfg.JWTAccessSecret,
-		RefreshTokenSecret: cfg.JWTRefreshSecret,
-		AccessTokenExpiry:  cfg.JWTAccessExpiry,
-		RefreshTokenExpiry: cfg.JWTRefreshExpiry,
-		Issuer:             cfg.JWTIssuer,
+		AccessTokenSecret:   cfg.JWTAccessSecret,
+		RefreshTokenSecret:  cfg.JWTRefreshSecret,
+		AccessTokenExpiry:   cfg.JWTAccessExpiry,
+		RefreshTokenExpiry:  cfg.JWTRefreshExpiry,
+		Issuer:              cfg.JWTIssuer,
+		AccessTokenCacheTTL: 60 * 2,
 	}
-	authService := service.NewAuthService(userRepo, jwtConfig)
+	authService := service.NewAuthService(userRepo, jwtConfig, redisConfig)
 
-	// Add the profile service
 	profileService := service.NewProfileService(userRepo)
 
-	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
 
-	// Add the profile handler
 	profileHandler := handlers.NewProfileHandler(profileService)
 
 	// Create router
@@ -97,27 +96,21 @@ func main() {
 	router.HandleFunc("/api/auth/refresh", authHandler.RefreshToken).Methods("POST")
 	router.HandleFunc("/api/auth/password-reset/request", authHandler.RequestPasswordReset).Methods("POST")
 
-	// Protected routes
 	api := router.PathPrefix("/api").Subrouter()
 	api.Use(handlers.AuthMiddleware(authService))
 
-	// Customer-only routes
 	customerAPI := api.PathPrefix("/customer").Subrouter()
 	customerAPI.Use(handlers.RoleMiddleware(string(domain.UserTypeCustomer)))
 
-	// Add customer profile endpoints
 	customerAPI.HandleFunc("/profile", profileHandler.GetCustomerProfile).Methods("GET")
 	customerAPI.HandleFunc("/profile", profileHandler.UpdateCustomerProfile).Methods("PUT")
 
-	// Driver-only routes
 	driverAPI := api.PathPrefix("/driver").Subrouter()
 	driverAPI.Use(handlers.RoleMiddleware(string(domain.UserTypeDriver)))
 
-	// Add driver profile endpoints
 	driverAPI.HandleFunc("/profile", profileHandler.GetDriverProfile).Methods("GET")
 	driverAPI.HandleFunc("/profile", profileHandler.UpdateDriverProfile).Methods("PUT")
 
-	// Start server
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.ServerPort),
 		Handler:      router,
@@ -126,7 +119,6 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start the server in a goroutine
 	go func() {
 		log.Printf("Server starting on port %s", cfg.ServerPort)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -134,7 +126,6 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

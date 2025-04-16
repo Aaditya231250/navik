@@ -31,7 +31,6 @@ type CustomerProfileUpdate struct {
 	Address   string `json:"address,omitempty"`
 }
 
-// DriverProfileUpdate contains fields that a driver can update
 type DriverProfileUpdate struct {
 	FirstName     string `json:"first_name,omitempty"`
 	LastName      string `json:"last_name,omitempty"`

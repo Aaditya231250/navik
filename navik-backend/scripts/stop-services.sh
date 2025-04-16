@@ -35,6 +35,12 @@ cd cmd/matching-service
 $COMPOSE_CMD down
 cd ../../
 
+# Stop Auth Service
+echo "Stopping Auth Service..."
+cd cmd/authentication
+$COMPOSE_CMD down
+cd ../../
+
 # Stop DynamoDB infrastructure
 echo "Stopping DynamoDB infrastructure..."
 cd deploy/dynamodb

@@ -5,7 +5,7 @@ services:
     image: openresty/openresty:alpine
     container_name: nginx-gateway
     ports:
-      - "80:80"
+      - "0.0.0.0:80:80"
     volumes:
       - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./config/conf.d:/etc/nginx/conf.d:ro

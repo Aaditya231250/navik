@@ -1,0 +1,46 @@
+version: '3'
+
+services:
+
+  redis:
+    image: redis:alpine
+    container_name: auth-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - kafka-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+  authentication-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    container_name: authentication-service
+    networks:
+      - kafka-network
+    restart: always
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://dynamodb-local:8000" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+      
+networks:
+  kafka-network:
+    external: true
+    name: kafka-network
+
+volumes:
+  redis-data:

@@ -1,0 +1,377 @@
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "customer@example.com",
+    "password": "SecurePass123!",
+    "first_name": "John",
+    "last_name": "Doe",
+    "user_type": "customer",
+    "phone": "+919898989898"
+  }' | jq
+
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "driver@example.com",
+    "password": "SecurePass123!",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "user_type": "driver",
+    "phone": "+919876543210"
+  }' | jq
+
+  curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "customer@example.com",
+    "password": "SecurePass123!"
+  }' | jq
+
+  curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "driver@example.com",
+    "password": "SecurePass123!"
+  }' | jq
+
+  curl -X POST http://localhost:8080/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"refresh_token\": \"$REFRESH_TOKEN\"
+  }" | jq
+
+  curl -X GET http://localhost:8080/api/customer/profile \
+  -H "Authorization: Bearer $ACCESS_TOKEN" | jq
+
+
+
+  // Add to imports section
+import (
+    "context"
+    "errors"
+    "fmt"
+    "time"
+    
+    "github.com/golang-jwt/jwt/v4"
+    "github.com/google/uuid"
+    "github.com/go-redis/redis/v8" // Add this import
+    "golang.org/x/crypto/bcrypt"
+    
+    "authentication/internal/domain"
+    "authentication/internal/repository"
+)
+
+// Add Redis configuration
+type RedisConfig struct {
+    Addr     string
+    Password string
+    DB       int
+    Enabled  bool // Toggle for easy disabling
+}
+
+// Update JwtConfig to add caching TTLs
+type JWTConfig struct {
+    AccessTokenSecret   string
+    RefreshTokenSecret  string
+    AccessTokenExpiry   time.Duration
+    RefreshTokenExpiry  time.Duration
+    Issuer              string
+    AccessTokenCacheTTL time.Duration // Cache time for blacklisted tokens
+}
+
+// Update AuthService with Redis client
+type AuthService struct {
+    userRepo  *repository.UserRepository
+    jwtConfig JWTConfig
+    redisClient *redis.Client
+    useCache    bool
+}
+
+// Add Redis client to constructor
+func NewAuthService(userRepo *repository.UserRepository, jwtConfig JWTConfig, redisConfig RedisConfig) *AuthService {
+    var redisClient *redis.Client
+    useCache := false
+    
+    if redisConfig.Enabled {
+        redisClient = redis.NewClient(&redis.Options{
+            Addr:     redisConfig.Addr,
+            Password: redisConfig.Password,
+            DB:       redisConfig.DB,
+        })
+        
+        // Test connection
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+        
+        if _, err := redisClient.Ping(ctx).Result(); err == nil {
+            useCache = true
+        } else {
+            fmt.Printf("Warning: Redis connection failed: %v, continuing without caching\n", err)
+        }
+    }
+    
+    return &AuthService{
+        userRepo:    userRepo,
+        jwtConfig:   jwtConfig,
+        redisClient: redisClient,
+        useCache:    useCache,
+    }
+}
+
+// Add token caching methods
+func (s *AuthService) cacheAccessToken(ctx context.Context, userID, tokenID string, expiresIn time.Duration) error {
+    if !s.useCache {
+        return nil
+    }
+    
+    key := fmt.Sprintf("access_token:%s:%s", userID, tokenID)
+    return s.redisClient.Set(ctx, key, "valid", expiresIn).Err()
+}
+
+func (s *AuthService) getAccessToken(ctx context.Context, userID, tokenID string) (bool, error) {
+    if !s.useCache {
+        return false, nil
+    }
+    
+    key := fmt.Sprintf("access_token:%s:%s", userID, tokenID)
+    val, err := s.redisClient.Get(ctx, key).Result()
+    
+    if err == redis.Nil {
+        return false, nil // Token not in cache
+    } else if err != nil {
+        return false, err // Redis error
+    }
+    
+    return val == "valid", nil
+}
+
+func (s *AuthService) invalidateUserTokens(ctx context.Context, userID string) error {
+    if !s.useCache {
+        return nil
+    }
+    
+    // Invalidate all user tokens by pattern
+    pattern := fmt.Sprintf("access_token:%s:*", userID)
+    keys, err := s.redisClient.Keys(ctx, pattern).Result()
+    if err != nil {
+        return err
+    }
+    
+    if len(keys) > 0 {
+        return s.redisClient.Del(ctx, keys...).Err()
+    }
+    
+    return nil
+}
+
+func (s *AuthService) blacklistToken(ctx context.Context, tokenID string, duration time.Duration) error {
+    if !s.useCache {
+        return nil
+    }
+    
+    key := fmt.Sprintf("blacklist:%s", tokenID)
+    return s.redisClient.Set(ctx, key, "revoked", duration).Err()
+}
+
+func (s *AuthService) isTokenBlacklisted(ctx context.Context, tokenID string) (bool, error) {
+    if !s.useCache {
+        return false, nil
+    }
+    
+    key := fmt.Sprintf("blacklist:%s", tokenID)
+    _, err := s.redisClient.Get(ctx, key).Result()
+    
+    if err == redis.Nil {
+        return false, nil // Not blacklisted
+    } else if err != nil {
+        return false, err // Redis error
+    }
+    
+    return true, nil // Token is blacklisted
+}
+
+// Update token generation to include a unique token ID
+func (s *AuthService) generateTokens(userID, userType string) (*domain.AuthResponse, error) {
+    ctx := context.Background()
+    tokenID := uuid.New().String()
+    
+    // Create access token with token ID
+    accessTokenExpiry := time.Now().Add(s.jwtConfig.AccessTokenExpiry)
+    accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+        "user_id":   userID,
+        "user_type": userType,
+        "token_id":  tokenID,
+        "exp":       accessTokenExpiry.Unix(),
+        "iat":       time.Now().Unix(),
+        "iss":       s.jwtConfig.Issuer,
+    })
+    
+    accessTokenString, err := accessToken.SignedString([]byte(s.jwtConfig.AccessTokenSecret))
+    if err != nil {
+        return nil, err
+    }
+    
+    // Create refresh token with same token ID for tracking
+    refreshTokenExpiry := time.Now().Add(s.jwtConfig.RefreshTokenExpiry)
+    refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+        "user_id":   userID,
+        "user_type": userType,
+        "token_id":  tokenID,
+        "exp":       refreshTokenExpiry.Unix(),
+        "iat":       time.Now().Unix(),
+        "iss":       s.jwtConfig.Issuer,
+    })
+    
+    refreshTokenString, err := refreshToken.SignedString([]byte(s.jwtConfig.RefreshTokenSecret))
+    if err != nil {
+        return nil, err
+    }
+    
+    // Cache the tokens
+    if s.useCache {
+        if err := s.cacheAccessToken(ctx, userID, tokenID, s.jwtConfig.AccessTokenExpiry); err != nil {
+            fmt.Printf("Warning: Failed to cache token: %v\n", err)
+        }
+    }
+    
+    return &domain.AuthResponse{
+        AccessToken:  accessTokenString,
+        RefreshToken: refreshTokenString,
+        ExpiresIn:    int(s.jwtConfig.AccessTokenExpiry.Seconds()),
+        UserID:       userID,
+        UserType:     userType,
+    }, nil
+}
+
+// Update validateToken to check the redis cache
+func (s *AuthService) validateToken(tokenString, secret string) (jwt.MapClaims, error) {
+    token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+        // Validate signing method
+        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+        }
+        
+        return []byte(secret), nil
+    })
+    
+    if err != nil {
+        if errors.Is(err, jwt.ErrTokenExpired) {
+            return nil, ErrExpiredToken
+        }
+        return nil, err
+    }
+    
+    // Check if token is valid
+    if !token.Valid {
+        return nil, ErrInvalidToken
+    }
+    
+    // Extract claims
+    claims, ok := token.Claims.(jwt.MapClaims)
+    if !ok {
+        return nil, ErrInvalidToken
+    }
+    
+    // Check if token is blacklisted
+    if s.useCache {
+        tokenID, ok := claims["token_id"].(string)
+        if !ok {
+            return nil, ErrInvalidToken
+        }
+        
+        blacklisted, err := s.isTokenBlacklisted(context.Background(), tokenID)
+        if err != nil {
+            fmt.Printf("Warning: Failed to check token blacklist: %v\n", err)
+        } else if blacklisted {
+            return nil, ErrInvalidToken
+        }
+    }
+    
+    return claims, nil
+}
+
+// Update refresh token to invalidate old tokens
+func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*domain.AuthResponse, error) {
+    // Parse and validate refresh token
+    claims, err := s.validateToken(refreshToken, s.jwtConfig.RefreshTokenSecret)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Extract user ID and type from claims
+    userID, ok := claims["user_id"].(string)
+    if !ok {
+        return nil, ErrInvalidToken
+    }
+    
+    userType, ok := claims["user_type"].(string)
+    if !ok {
+        return nil, ErrInvalidToken
+    }
+    
+    tokenID, ok := claims["token_id"].(string)
+    if !ok {
+        return nil, ErrInvalidToken
+    }
+    
+    // Get user from database
+    user, err := s.userRepo.GetUserByID(ctx, userID)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Verify that the stored refresh token matches
+    if user.RefreshToken != refreshToken {
+        return nil, ErrInvalidToken
+    }
+    
+    // Blacklist the current token
+    if s.useCache && tokenID != "" {
+        if err := s.blacklistToken(ctx, tokenID, s.jwtConfig.RefreshTokenExpiry); err != nil {
+            fmt.Printf("Warning: Failed to blacklist token: %v\n", err)
+        }
+    }
+    
+    // Generate new tokens
+    authResp, err := s.generateTokens(userID, userType)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Update refresh token in database
+    err = s.userRepo.UpdateRefreshToken(ctx, userID, authResp.RefreshToken)
+    if err != nil {
+        return nil, err
+    }
+    
+    return authResp, nil
+}
+
+// Update ResetPassword to invalidate all tokens
+func (s *AuthService) ResetPassword(ctx context.Context, userID, newPassword string) error {
+    // Get user by ID
+    user, err := s.userRepo.GetUserByID(ctx, userID)
+    if err != nil {
+        return err
+    }
+    
+    // Hash new password
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+    if err != nil {
+        return err
+    }
+    
+    // Update user password
+    user.Password = string(hashedPassword)
+    user.RefreshToken = "" // Invalidate all existing sessions
+    
+    // Invalidate all tokens in cache
+    if s.useCache {
+        if err := s.invalidateUserTokens(ctx, userID); err != nil {
+            fmt.Printf("Warning: Failed to invalidate user tokens in cache: %v\n", err)
+        }
+    }
+    
+    // Save updated user
+    return s.userRepo.UpdateUser(ctx, *user)
+}

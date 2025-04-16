@@ -4,7 +4,6 @@ import (
     "time"
 )
 
-// UserType defines the type of user in the system
 type UserType string
 
 const (
@@ -12,7 +11,6 @@ const (
     UserTypeDriver   UserType = "driver"
 )
 
-// User represents common user attributes
 type User struct {
     ID           string    `json:"id" dynamodbav:"id"`
     Email        string    `json:"email" dynamodbav:"email"`
@@ -27,14 +25,12 @@ type User struct {
     RefreshToken string    `json:"-" dynamodbav:"refresh_token,omitempty"`
 }
 
-// Customer contains customer-specific fields
 type Customer struct {
     User
     Address    string `json:"address,omitempty" dynamodbav:"address,omitempty"`
     LoyaltyID  string `json:"loyalty_id,omitempty" dynamodbav:"loyalty_id,omitempty"`
 }
 
-// Driver contains driver-specific fields
 type Driver struct {
     User
     LicenseNumber string    `json:"license_number,omitempty" dynamodbav:"license_number,omitempty"`
@@ -43,7 +39,6 @@ type Driver struct {
     IsVerified    bool      `json:"is_verified" dynamodbav:"is_verified"`
 }
 
-// Registration represents data needed for user registration
 type Registration struct {
     Email       string   `json:"email" validate:"required,email"`
     Password    string   `json:"password" validate:"required,min=8"`
@@ -59,13 +54,11 @@ type Registration struct {
     VehicleInfo     string    `json:"vehicle_info,omitempty"`
 }
 
-// Login represents data needed for user login
 type Login struct {
     Email    string `json:"email" validate:"required,email"`
     Password string `json:"password" validate:"required"`
 }
 
-// AuthResponse represents authentication response with tokens
 type AuthResponse struct {
     AccessToken  string `json:"access_token"`
     RefreshToken string `json:"refresh_token"`

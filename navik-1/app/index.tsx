@@ -1,36 +1,54 @@
-// app/index.tsx
-import { View, Text, Image } from "react-native";
+import { View, Text, Image, StyleSheet, StatusBar, Dimensions } from "react-native";
+import React, { useEffect } from "react";
 import { useRouter } from "expo-router";
-import { Pressable } from "react-native";
-import "../global.css"
 
 export default function Index() {
   const router = useRouter();
+  const { width } = Dimensions.get("window");
+
+  useEffect(() => {
+    // Navigate to the next screen after a 2-second delay
+    const timeout = setTimeout(() => {
+      router.replace("/home");
+    }, 2000);
+
+    // Cleanup the timeout on component unmount
+    return () => clearTimeout(timeout);
+  }, [router]);
 
   return (
-    <View className="flex-1 justify-center items-center bg-slate-100">
-      {/* Logo Section */}
-      <View className="items-center mb-8">
-        <Image
-          source={require("../assets/images/react-logo.png")} // Add your logo in assets
-          className="w-32 h-32 mb-4 rounded-lg"
-        />
-        <Text className="text-3xl font-bold text-blue-600">Welcome to Navik</Text>
-        <Text className="text-gray-600 mt-2">Your Navigation Assistant</Text>
+    <>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <View style={styles.container}>
+        {/* Logo */}
+        {/* <Image
+          source={require("../assets/images/react-logo.png")}
+          style={[styles.logo, { width: width * 0.3, height: width * 0.3 }]}
+        /> */}
+        
+        {/* Title */}
+        <Text style={styles.title}>NAVIK</Text>
       </View>
-
-      {/* Action Button */}
-      <Pressable
-        onPress={() => router.push("/home")}
-        className="bg-blue-500 px-6 py-3 rounded-lg shadow-lg active:bg-blue-600"
-      >
-        <Text className="text-white text-lg font-semibold">Get Started</Text>
-      </Pressable>
-
-      {/* Footer */}
-      <Text className="absolute bottom-8 text-gray-500 text-sm">
-        v1.0.0 • navik.com
-      </Text>
-    </View>
+    </>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#000", // Dark background
+    justifyContent: "center", // Center content vertically
+    alignItems: "center", // Center content horizontally
+  },
+  logo: {
+    resizeMode: "contain",
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 36,
+    fontWeight: "bold",
+    color: "#fff", // White text for contrast
+    letterSpacing: 2,
+    marginTop: 20,
+  },
+});

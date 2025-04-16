@@ -30,7 +30,6 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    
     "experiments": {
       "typedRoutes": true
     },
@@ -38,6 +37,9 @@
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
-    }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

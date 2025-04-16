@@ -1,19 +1,41 @@
 import { View, Text, Image, StyleSheet, StatusBar, Dimensions } from "react-native";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function Index() {
   const router = useRouter();
   const { width } = Dimensions.get("window");
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Navigate to the next screen after a 2-second delay
-    const timeout = setTimeout(() => {
-      router.replace("/home");
-    }, 2000);
+    // Check if user is authenticated
+    const checkAuthStatus = async () => {
+      try {
+        // Try to get the auth token from storage
+        const userToken = await AsyncStorage.getItem('userToken');
+        
+        // Wait for splash screen minimum time
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Navigate based on authentication status
+        if (userToken) {
+          // User is authenticated, go to home
+          router.replace("/home");
+        } else {
+          // User is not authenticated, go to login
+          router.replace("/auth/login");
+        }
+      } catch (error) {
+        console.error("Failed to check auth status:", error);
+        // On error, default to login page
+        router.replace("/auth/login");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    // Cleanup the timeout on component unmount
-    return () => clearTimeout(timeout);
+    checkAuthStatus();
   }, [router]);
 
   return (

@@ -12,21 +12,18 @@ import (
 	"github.com/IBM/sarama"
 )
 
-// ConsumerGroupHandler implements sarama.ConsumerGroupHandler interface
 type ConsumerGroupHandler struct {
 	service       service.MatchingService
 	activeWorkers sync.WaitGroup
 	processingMap sync.Map // To track messages being processed
 }
 
-// NewConsumerGroupHandler creates a new Kafka consumer handler
 func NewConsumerGroupHandler(service service.MatchingService) *ConsumerGroupHandler {
 	return &ConsumerGroupHandler{
 		service: service,
 	}
 }
 
-// Setup is called when the consumer group session is starting
 func (h *ConsumerGroupHandler) Setup(session sarama.ConsumerGroupSession) error {
 	log.Printf("Consumer group session started: %s", session.MemberID())
 	return nil
@@ -79,13 +76,13 @@ func (h *ConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 
 				log.Printf("Processing message: topic=%s, partition=%d, offset=%d, key=%s, user=%s",
 					msg.Topic, msg.Partition, msg.Offset, string(msg.Key), userLoc.UserID)
-				
-				if time.Now().Unix() - userLoc.Timestamp > 300 { 
+
+				if time.Now().Unix()-userLoc.Timestamp > 300 {
 					log.Printf("Skipping stale location update for user %s (%.2f minutes old)",
 						userLoc.UserID, float64(time.Now().Unix()-userLoc.Timestamp)/60)
 					session.MarkMessage(msg, "")
 					return
-				}	
+				}
 
 				if err := h.service.ProcessUserLocation(session.Context(), userLoc); err != nil {
 					log.Printf("Error processing user location: %v", err)

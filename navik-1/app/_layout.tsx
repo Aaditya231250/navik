@@ -28,6 +28,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <Stack screenOptions={{ headerShown: false }}>
+      {/* Auth flow */}
+      <Stack.Screen name="auth" />
       <Stack.Screen name="index" />
       <Stack.Screen name="home" />
       <Stack.Screen name="plan-ride" />

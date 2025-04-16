@@ -54,7 +54,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         {/* Ride History */}
-        <TouchableOpacity className="flex-row items-center justify-between p-4 bg-gray-100 rounded-lg">
+        <TouchableOpacity className="flex-row items-center justify-between p-4 bg-gray-100 rounded-lg" onPress={() => router.navigate("/home/activity")}>
           <Text className="text-base font-medium">Ride History</Text>
           <MaterialIcons name="history" size={24} color="#000" />
         </TouchableOpacity>

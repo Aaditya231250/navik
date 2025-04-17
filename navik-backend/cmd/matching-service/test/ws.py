@@ -7,15 +7,15 @@ from datetime import datetime
 
 async def test_websocket_flow():
     user_id = "customer-rajesh876@example.com"
-    ws_url = f"ws://localhost/ws?user_id={user_id}"
-    api_url = "http://localhost/api/matching"
+    ws_url = f"ws://172.31.115.2/ws?user_id={user_id}"
+    api_url = "http://172.31.115.2/api/matching"
     
     test_location = {
         "user_id": user_id,
-    "city": "delhi",
-    "latitude": 26.32504,
-    "longitude": 73.12539,
-    "request_type": "RIDE_REQUEST"
+        "city": "mumbai",
+        "latitude": 26.32504,
+        "longitude": 73.12539,
+        "request_type": "RIDE_REQUEST"
     }
 
     async with connect(ws_url) as websocket:

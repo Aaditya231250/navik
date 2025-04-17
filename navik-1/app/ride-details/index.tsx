@@ -507,7 +507,7 @@ export default function RideDetailsScreen() {
         <TouchableOpacity
           disabled={!selectedRide}
           onPress={() => router.push({
-            pathname: "/services",
+            pathname: "/searching",
             params: {
               originTitle: origin.title || "Current Location",
               originAddress: "Your current location",

@@ -278,13 +278,13 @@ curl -X POST http://localhost/api/location \
   }'
 
   curl -v -X POST \
-  http://localhost/api/matching \
+  http://172.31.115.2/api/matching \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": "USR-12345678",
-    "city": "delhi",
-    "latitude": 19.076,
-    "longitude": 72.877,
+    "user_id": "user_id",
+    "city": "mumbai",
+    "latitude": 26.32504,
+    "longitude": 73.12539,
     "request_type": "RIDE_REQUEST"
   }'
 

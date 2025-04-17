@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect }  from "react";
 import {
   View,
   Text,
@@ -6,12 +6,63 @@ import {
   TouchableOpacity,
   StatusBar,
   Platform,
+  Alert, 
 } from "react-native";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useNavigation } from '@react-navigation/native';
+import { clearAuthData, getUserData, getUserType } from "@/utils/authStorage";
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const [profileData, setProfileData] = useState(null);
+  const [userType, setUserType] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadProfileData() {
+      try {
+        const userData = await getUserData();
+        const type = await getUserType();
+        setProfileData(userData);
+        setUserType(type);
+      } catch (error) {
+        console.error('Error loading profile data:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    loadProfileData();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      Alert.alert(
+        "Logout",
+        "Are you sure you want to logout?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Logout",
+            onPress: async () => {
+              await clearAuthData();
+              
+              // Navigate to login screen
+              router.replace("/auth/login");
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error("Logout error:", error);
+      Alert.alert("Error", "Could not log out. Please try again.");
+    }
+  };
 
   return (
     <View
@@ -35,8 +86,17 @@ export default function ProfileScreen() {
           source={require("@/assets/images/profile-avatar.jpeg")}
           className="w-24 h-24 rounded-full"
         />
-        <Text className="text-lg font-semibold mt-4">John Doe</Text>
-        <Text className="text-sm text-gray-500">john.doe@example.com</Text>
+        <Text className="text-lg font-semibold mt-4">
+          {profileData ? `${profileData.first_name} ${profileData.last_name}` : 'User Name'}
+        </Text>
+        <Text className="text-sm text-gray-500">
+          {profileData ? profileData.email : 'user@example.com'}
+        </Text>
+        {userType && (
+          <Text className="text-xs text-blue-500 mt-1">
+            {userType === 'driver' ? 'Driver Account' : 'Customer Account'}
+          </Text>
+        )}
       </View>
 
       {/* Profile Options */}
@@ -54,14 +114,14 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         {/* Ride History */}
-        <TouchableOpacity className="flex-row items-center justify-between p-4 bg-gray-100 rounded-lg" onPress={() => router.navigate("/home/activity")}>
+        <TouchableOpacity className="flex-row items-center justify-between p-4 bg-gray-100 rounded-lg" onPress={() => navigation.navigate('Activity')}>
           <Text className="text-base font-medium">Ride History</Text>
           <MaterialIcons name="history" size={24} color="#000" />
         </TouchableOpacity>
 
         {/* Logout */}
         <TouchableOpacity
-          onPress={() => alert("Logged out")}
+          onPress={handleLogout}
           className="flex-row items-center justify-between p-4 bg-red-100 rounded-lg"
         >
           <Text className="text-base font-medium text-red-500">Logout</Text>

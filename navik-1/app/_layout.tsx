@@ -35,7 +35,7 @@ export default function RootLayout() {
       <Stack.Screen name="plan-ride" />
       <Stack.Screen name="ride-details" />
       <Stack.Screen name="home/profile" />
-      <Stack.Screen name="ride-journey" />
+      <Stack.Screen name="searching" />
     </Stack>
     </GestureHandlerRootView>
   );

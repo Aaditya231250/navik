@@ -1,5 +1,5 @@
 // app/utils/api.ts
-import { getAccessToken, getRefreshToken, storeAuthData, clearAuthData } from './authStorage';
+import { getAccessToken, getRefreshToken, storeAuthData, clearAuthData, storeUserData } from './authStorage';
 
 const API_BASE_URL = "http://172.31.115.2/api"; // Replace with your API URL
 
@@ -92,7 +92,26 @@ export const authAPI = {
     if (response.ok) {
       await storeAuthData(data);
     }
-    
+
+    // After successful login, fetch and store profile data
+    try {
+      const userType = data.user_type;
+      const profileEndpoint = userType === 'driver' ? '/driver/profile' : '/customer/profile';
+      
+      const profileResponse = await fetch(`${API_BASE_URL}${profileEndpoint}`, {
+        headers: {
+          'Authorization': `Bearer ${data.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (profileResponse.ok) {
+        const profileData = await profileResponse.json();
+        await storeUserData(profileData);
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile data:', error);
+    }
     return { success: response.ok, data };
   },
   

@@ -1,0 +1,20 @@
+version: '3'
+
+services:
+  payment:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payment
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    networks:
+      - kafka-network
+
+networks:
+  kafka-network:
+    external: true
+    name: kafka-network

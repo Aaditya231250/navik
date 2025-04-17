@@ -28,6 +28,12 @@ cd cmd/maps
 $COMPOSE_CMD up -d --build
 cd ../../
 
+echo "Starting Payment infrastructure..."
+cd cmd/payment
+$COMPOSE_CMD up -d --build
+cd ../../
+
+
 echo "Waiting for 5sec to stablise..."
 sleep 5
 

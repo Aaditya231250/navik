@@ -7,10 +7,12 @@ import (
 	"math/rand"
 	"sort"
 	"time"
+	"encoding/json"
 
 	"matching-service/internal/model"
 	"matching-service/internal/repository"
 	"matching-service/internal/util"
+	"github.com/go-redis/redis/v8"
 )
 
 type MatchingService interface {
@@ -21,17 +23,18 @@ type matchingService struct {
 	repository         repository.DriverRepository
 	minDriversToReturn int
 	maxDistanceKm      float64
+	redisClient        *redis.Client
 }
-
 // NewMatchingService creates a new matching service
 func NewMatchingService(repo repository.DriverRepository, config struct {
 	MinDriversToReturn int
 	MaxDistanceKm      float64
-}) MatchingService {
+}, redisClient *redis.Client) MatchingService {
 	return &matchingService{
 		repository:         repo,
 		minDriversToReturn: config.MinDriversToReturn,
 		maxDistanceKm:      config.MaxDistanceKm,
+		redisClient:        redisClient,
 	}
 }
 
@@ -51,8 +54,15 @@ func (s *matchingService) ProcessUserLocation(ctx context.Context, loc model.Use
 
 	// Process the matching results
 	s.processMatchingResults(enrichedUser, drivers)
-
+	// Store the user location in Redis for future reference
+	response := s.formatDriverResponse(enrichedUser, drivers)
+	data, _ := json.Marshal(response)
+	// Publish to Redis Pub/Sub for this user
+	if err := s.redisClient.Publish(ctx, "user:"+loc.UserID, data).Err(); err != nil {
+		log.Printf("Failed to publish to Redis: %v", err)
+	}
 	return nil
+
 }
 
 // enrichUserLocation adds H3 indices to a user location
@@ -261,10 +271,42 @@ func (s *matchingService) processMatchingResults(user model.EnrichedUserLocation
 
 	log.Printf("Found %d drivers for user %s", len(drivers), user.UserID)
 
-	// Format response for the user
 	response := s.formatDriverResponse(user, drivers)
 
-	// In a real application, you would send this response back to the user
-	// For now, just log it
-	log.Printf("Response for user %s: %+v", user.UserID, response)
+
+    ctx := context.Background()
+    userKey := fmt.Sprintf("user:%s:matches", user.UserID)
+    
+    responseJSON, err := json.Marshal(response)
+    if err != nil {
+        log.Printf("Error marshaling response to JSON: %v", err)
+        return
+    }
+    
+    // Store in Redis with 5 minute expiration
+    err = s.redisClient.Set(ctx, userKey, responseJSON, 5*time.Minute).Err()
+    if err != nil {
+        log.Printf("Error storing matches in Redis: %v", err)
+        return
+    }
+    
+    log.Printf("Stored %d driver matches in Redis for user %s", len(drivers), user.UserID)
+    
+    notification := map[string]interface{}{
+        "event": "driver_matches_updated",
+        "user_id": user.UserID,
+        "match_count": len(drivers),
+        "timestamp": time.Now().Unix(),
+    }
+    
+    notificationJSON, err := json.Marshal(notification)
+    if err != nil {
+        log.Printf("Error marshaling notification: %v", err)
+        return
+    }
+    
+    err = s.redisClient.Publish(ctx, "user_updates", notificationJSON).Err()
+    if err != nil {
+        log.Printf("Error publishing update notification: %v", err)
+    }
 }

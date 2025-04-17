@@ -11,27 +11,44 @@ import {
   ActivityIndicator,
   Alert
 } from "react-native";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "expo-router";
-import { MaterialIcons, Ionicons, FontAwesome } from "@expo/vector-icons";
+import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useMapWebSocket, SearchPlace } from "@/utils/websocket";
 import { debounce } from "lodash";
 
 export default function PlanRideScreen() {
   const router = useRouter();
-  const [activeField, setActiveField] = useState<"origin" | "destination">("origin");
-  const [origin, setOrigin] = useState<{ text: string; coords: { latitude: number; longitude: number } | null }>({ 
-    text: "Current Location", 
-    coords: null 
-  });
-  const [destination, setDestination] = useState<{ text: string; coords: { latitude: number; longitude: number } | null }>({ 
-    text: "", 
-    coords: null 
-  });
-  const [showPassengerModal, setShowPassengerModal] = useState(false);
-  const [passengers, setPassengers] = useState(1);
+  const inputsContainerRef = useRef(null);
+  const [inputsHeight, setInputsHeight] = useState(140);
+  const [activeField, setActiveField] = useState<"origin" | "destination" | null>("destination");
+  const [searchText, setSearchText] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  
+  // Updated state to include placeId
+  const [origin, setOrigin] = useState<{ 
+    text: string;
+    placeId: string | null;
+    coords: { latitude: number; longitude: number } | null 
+  }>({ 
+    text: "Current Location", 
+    placeId: null,
+    coords: null 
+  });
+  
+  const [destination, setDestination] = useState<{ 
+    text: string;
+    placeId: string | null;
+    coords: { latitude: number; longitude: number } | null 
+  }>({ 
+    text: "", 
+    placeId: null,
+    coords: null 
+  });
+  
+  const [passengers, setPassengers] = useState(1);
+  const [showPassengerModal, setShowPassengerModal] = useState(false);
   
   const wsUrl = "ws://172.31.115.2/search";
   const { 
@@ -42,6 +59,7 @@ export default function PlanRideScreen() {
     reconnect 
   } = useMapWebSocket(wsUrl);
 
+  // Get current location on mount
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -52,12 +70,24 @@ export default function PlanRideScreen() {
         const address = await Location.reverseGeocodeAsync(location.coords);
         setOrigin({
           text: address[0]?.name || "Current Location",
+          placeId: null, // Current location doesn't have a placeId
           coords: location.coords
         });
       } catch (error) {
         Alert.alert("Error", "Failed to get current location");
       }
     })();
+  }, []);
+
+  // Measure inputs container for proper modal positioning
+  useEffect(() => {
+    if (inputsContainerRef.current) {
+      setTimeout(() => {
+        inputsContainerRef.current.measure((x, y, width, height, pageX, pageY) => {
+          setInputsHeight(pageY + height + 20);
+        });
+      }, 300);
+    }
   }, []);
 
   const handleSearch = useCallback(
@@ -70,10 +100,17 @@ export default function PlanRideScreen() {
     [searchPlaces]
   );
 
+  // Updated to store placeId instead of coordinates
   const handleLocationSelect = (place: SearchPlace) => {
+    if (!place || !place.id) {
+      console.warn("Invalid place data", place);
+      return;
+    }
+
     const update = {
       text: place.name,
-      coords: { latitude: place.latitude, longitude: place.longitude }
+      placeId: place.id,
+      coords: null // We don't need coordinates anymore
     };
 
     if (activeField === "origin") {
@@ -81,24 +118,37 @@ export default function PlanRideScreen() {
     } else {
       setDestination(update);
     }
+    
     setIsSearching(false);
+    setSearchText("");
+    setActiveField(null);
   };
 
+  // Updated to use placeId for navigation
   const handleConfirm = () => {
-    if (!origin.coords || !destination.coords) {
-      Alert.alert("Please select both pickup and destination locations.");
+    // Special case for origin if it's current location (has coords but no placeId)
+    if (!origin.text || !destination.text || (!destination.placeId && !destination.coords)) {
+      Alert.alert("Please select both pickup and destination locations");
       return;
     }
     
+    // Navigate with placeIds (or coords for current location)
     router.push({
       pathname: "/ride-details",
       params: {
-        originLat: origin.coords.latitude.toString(),
-        originLng: origin.coords.longitude.toString(),
-        destLat: destination.coords.latitude.toString(),
-        destLng: destination.coords.longitude.toString(),
+        // For origin, we might use coordinates if it's current location
+        originPlaceId: origin.placeId || "",
+        destPlaceId: destination.placeId || "",
+        // Include coordinates as fallback if available
+        originLat: origin.coords?.latitude?.toString() || "",
+        originLng: origin.coords?.longitude?.toString() || "",
+        destLat: destination.coords?.latitude?.toString() || "",
+        destLng: destination.coords?.longitude?.toString() || "",
+        // Always include display text
         originTitle: origin.text,
-        destTitle: destination.text
+        destTitle: destination.text,
+        // Include passenger count
+        passengers: passengers.toString()
       }
     });
   };
@@ -127,7 +177,17 @@ export default function PlanRideScreen() {
         <Text className="text-xl font-semibold">Plan your ride</Text>
       </View>
 
-      <View className="px-4 py-2">
+      <View 
+        ref={inputsContainerRef} 
+        className="px-4 py-2"
+        onLayout={() => {
+          if (inputsContainerRef.current) {
+            inputsContainerRef.current.measure((x, y, width, height, pageX, pageY) => {
+              setInputsHeight(pageY + height + 20);
+            });
+          }
+        }}
+      >
         <View className="flex-row items-center mb-2">
           <View className="mr-3 items-center">
             <View className="w-2 h-2 bg-gray-500 rounded-full" />
@@ -158,16 +218,33 @@ export default function PlanRideScreen() {
       </View>
 
       {activeField && (
-        <View className="absolute top-32 left-0 right-0 bottom-0 bg-white z-50">
+        <View 
+          className="absolute left-0 right-0 bottom-0 bg-white z-50"
+          style={{ 
+            top: inputsHeight, 
+            elevation: 5,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+          }}
+        >
           <View className="flex-row items-center px-4 py-3 border-b border-gray-200">
             <MaterialIcons name="search" size={24} color="#666" />
             <TextInput
               autoFocus
               style={{ flex: 1, marginLeft: 8, fontSize: 16 }}
               placeholder={`Search for ${activeField}...`}
-              onChangeText={handleSearch}
+              onChangeText={(text) => {
+                setSearchText(text);
+                handleSearch(text);
+              }}
+              value={searchText}
             />
-            <TouchableOpacity onPress={() => setActiveField(null)}>
+            <TouchableOpacity onPress={() => {
+              setActiveField(null);
+              setSearchText("");
+            }}>
               <MaterialIcons name="close" size={24} color="#666" />
             </TouchableOpacity>
           </View>
@@ -189,10 +266,17 @@ export default function PlanRideScreen() {
             </View>
           )}
 
+          {isSearching && searchResults.length === 0 && (
+            <View className="items-center justify-center py-20">
+              <ActivityIndicator size="large" color="#0000ff" />
+              <Text className="mt-4 text-gray-500">Searching locations...</Text>
+            </View>
+          )}
+
           <FlatList
             data={searchResults}
             renderItem={renderItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.id.toString()}
             ListHeaderComponent={
               <TouchableOpacity
                 className="flex-row items-center py-4 px-4 bg-white border-b border-gray-200"
@@ -200,11 +284,20 @@ export default function PlanRideScreen() {
                   try {
                     const location = await Location.getCurrentPositionAsync();
                     const address = await Location.reverseGeocodeAsync(location.coords);
-                    setOrigin({
+                    const update = {
                       text: address[0]?.name || "Current Location",
-                      coords: location.coords
-                    });
+                      placeId: null, // Current location doesn't have a placeId
+                      coords: location.coords // Keep coords for current location
+                    };
+                    
+                    if (activeField === "origin") {
+                      setOrigin(update);
+                    } else if (activeField === "destination") {
+                      setDestination(update);
+                    }
+                    
                     setActiveField(null);
+                    setSearchText("");
                   } catch (error) {
                     Alert.alert("Error", "Could not get current location");
                   }
@@ -219,11 +312,18 @@ export default function PlanRideScreen() {
                 </View>
               </TouchableOpacity>
             }
+            ListEmptyComponent={
+              !isSearching && searchText.length > 0 && (
+                <View className="items-center justify-center py-20">
+                  <Text className="text-gray-500">No results found</Text>
+                </View>
+              )
+            }
           />
         </View>
       )}
 
-      <View className="px-4 py-2">
+      <View className="px-4 py-2 mt-2">
         <TouchableOpacity
           className="bg-black py-3 rounded-lg items-center"
           onPress={handleConfirm}
@@ -247,17 +347,17 @@ export default function PlanRideScreen() {
             <Text className="text-xl font-bold mb-4">Select passengers</Text>
             {[1, 2, 3, 4, "4+"].map((num) => (
               <TouchableOpacity
-                key={num}
+                key={num.toString()}
                 className="py-3 border-b border-gray-200 flex-row items-center"
                 onPress={() => {
-                  setPassengers(typeof num === "string" ? 4 : num);
+                  setPassengers(typeof num === "string" ? 4 : Number(num));
                   setShowPassengerModal(false);
                 }}
               >
                 <Text className="text-lg">
                   {num} {num === 1 ? "Passenger" : "Passengers"}
                 </Text>
-                {passengers === num && (
+                {passengers === (typeof num === "string" ? 4 : Number(num)) && (
                   <MaterialIcons name="check" size={24} color="#000" style={{ marginLeft: "auto" }} />
                 )}
               </TouchableOpacity>

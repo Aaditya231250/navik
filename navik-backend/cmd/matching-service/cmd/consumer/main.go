@@ -19,6 +19,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+
+	"github.com/go-redis/redis/v8"
 )
 
 func main() {
@@ -31,6 +33,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	// Initialize Redis client
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "redis:6379", 
+		DB:   0,            // use default DB
+		Password: "",      // no password set
+	})
+	defer redisClient.Close()
 
 	// Initialize DynamoDB client
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -54,7 +63,7 @@ func main() {
 	}{
 		MinDriversToReturn: cfg.Matching.MinDriversToReturn,
 		MaxDistanceKm:      cfg.Matching.MaxDistanceKm,
-	})
+	},redisClient)
 
 	// Setup Kafka consumer config
 	kafkaConfig := sarama.NewConfig()

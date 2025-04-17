@@ -1,5 +1,4 @@
-// app/ride-details/index.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,6 +6,8 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
+  Alert,
+  Dimensions
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -26,6 +27,7 @@ const PRICING = {
 export default function RideDetailsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const mapRef = useRef<MapView>(null);
   const [selectedRide, setSelectedRide] = useState(null);
   const [loading, setLoading] = useState(true);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
@@ -35,57 +37,197 @@ export default function RideDetailsScreen() {
   const [rideOptions, setRideOptions] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [destinationCoords, setDestinationCoords] = useState(null);
+  
+  // Array of nearby drivers near IIT Jodhpur
+  const [nearbyDrivers, setNearbyDrivers] = useState([
+    {
+      id: 1,
+      coordinate: {
+        latitude: 26.2771,  // Near IIT Jodhpur campus
+        longitude: 73.0108
+      },
+      name: "Driver 1"
+    },
+    {
+      id: 2,
+      coordinate: {
+        latitude: 26.2763,
+        longitude: 73.0155
+      },
+      name: "Driver 2"
+    },
+    {
+      id: 3,
+      coordinate: {
+        latitude: 26.2792,
+        longitude: 73.0075
+      },
+      name: "Driver 3"
+    },
+    {
+      id: 4,
+      coordinate: {
+        latitude: 26.2740,
+        longitude: 73.0128
+      },
+      name: "Driver 4"
+    },
+    {
+      id: 5,
+      coordinate: {
+        latitude: 26.2782,
+        longitude: 73.0197
+      },
+      name: "Driver 5"
+    }
+  ]);
+  
+  // Flag to prevent repeated map fitting
+  const [mapFitted, setMapFitted] = useState(false);
+  
+  // Get screen dimensions
+  const { width, height } = Dimensions.get('window');
 
-  // Get destination from navigation params
+  // Extract place IDs and fallback coordinates from params
+  const originPlaceId = params.originPlaceId as string;
+  const destPlaceId = params.destPlaceId as string;
   const destination = {
-    latitude: parseFloat(params.destLat),
-    longitude: parseFloat(params.destLng),
-    title: params.destTitle,
-    address: params.destAddress
+    placeId: destPlaceId,
+    latitude: parseFloat(params.destLat as string) || 0,
+    longitude: parseFloat(params.destLng as string) || 0,
+    title: params.destTitle as string,
+    address: params.destAddress as string
+  };
+  
+  const origin = {
+    placeId: originPlaceId,
+    latitude: parseFloat(params.originLat as string) || 0,
+    longitude: parseFloat(params.originLng as string) || 0,
+    title: params.originTitle as string || "Current Location"
   };
 
-  // Get user's current location
+  // Get user's current location if no origin coordinates provided
   useEffect(() => {
     (async () => {
+      if (origin.placeId || (origin.latitude && origin.longitude)) {
+        if (origin.latitude && origin.longitude) {
+          setUserLocation({
+            latitude: origin.latitude,
+            longitude: origin.longitude
+          });
+        }
+        return;
+      }
+      
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      if (status !== 'granted') {
+        Alert.alert("Location Access", "Permission to access location was denied");
+        return;
+      }
 
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      });
+      try {
+        let location = await Location.getCurrentPositionAsync({});
+        setUserLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+        });
+      } catch (error) {
+        console.error("Error getting current location:", error);
+        Alert.alert("Location Error", "Could not determine your current location");
+      }
     })();
   }, []);
 
   // Calculate route when locations are available
   useEffect(() => {
-    if (userLocation && destination.latitude) {
+    if (
+      originPlaceId || 
+      destPlaceId || 
+      (userLocation && destination.latitude && destination.longitude)
+    ) {
       setupMap();
     }
-  }, [userLocation, destination]);
+  }, [userLocation, destination, originPlaceId, destPlaceId]);
 
   const setupMap = async () => {
     try {
-      // Set map region to show both points
-      const newRegion = {
-        latitude: (userLocation.latitude + destination.latitude) / 2,
-        longitude: (userLocation.longitude + destination.longitude) / 2,
-        latitudeDelta: Math.abs(userLocation.latitude - destination.latitude) * 2,
-        longitudeDelta: Math.abs(userLocation.longitude - destination.longitude) * 2,
-      };
-      setMapRegion(newRegion);
+      // Set initial region
+      if (
+        (userLocation || (origin.latitude && origin.longitude)) && 
+        (destination.latitude && destination.longitude)
+      ) {
+        const originLat = userLocation?.latitude || origin.latitude;
+        const originLng = userLocation?.longitude || origin.longitude;
+        
+        // Set a looser initial region - this won't restrict panning
+        const newRegion = {
+          latitude: (originLat + destination.latitude) / 2,
+          longitude: (originLng + destination.longitude) / 2,
+          latitudeDelta: Math.abs(originLat - destination.latitude) * 1.5,
+          longitudeDelta: Math.abs(originLng - destination.longitude) * 1.5,
+        };
+        setMapRegion(newRegion);
+      }
       
-      // Get route details
-      await getRouteDirections(userLocation, destination);
+      // Get route
+      if (originPlaceId || destPlaceId) {
+        await getRouteDirectionsWithPlaceId();
+      } else if (userLocation && destination.latitude && destination.longitude) {
+        await getRouteDirections(
+          userLocation, 
+          { latitude: destination.latitude, longitude: destination.longitude }
+        );
+      } else {
+        throw new Error("Insufficient location data to calculate route");
+      }
       
-      setLoading(false);
     } catch (error) {
       console.error("Error setting up map:", error);
+      Alert.alert("Route Error", "Could not calculate the route between locations");
       setLoading(false);
     }
   };
 
+  // Get directions using place IDs
+  const getRouteDirectionsWithPlaceId = async () => {
+    try {
+      const apiKey = "AIzaSyDDpFzLAd-65b3ouKzDDXKqt1VEQk3ZfOw";
+      let originParam = '';
+      let destParam = '';
+      
+      // Prepare origin parameter
+      if (originPlaceId) {
+        originParam = `place_id:${originPlaceId}`;
+      } else if (userLocation) {
+        originParam = `${userLocation.latitude},${userLocation.longitude}`;
+      } else if (origin.latitude && origin.longitude) {
+        originParam = `${origin.latitude},${origin.longitude}`;
+      }
+      
+      // Prepare destination parameter
+      if (destPlaceId) {
+        destParam = `place_id:${destPlaceId}`;
+      } else if (destination.latitude && destination.longitude) {
+        destParam = `${destination.latitude},${destination.longitude}`;
+      }
+      
+      if (!originParam || !destParam) {
+        throw new Error("Missing origin or destination for route calculation");
+      }
+      
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/directions/json?origin=${originParam}&destination=${destParam}&key=${apiKey}`
+      );
+      
+      const json = await response.json();
+      processDirectionsResponse(json);
+    } catch (error) {
+      console.error("Error getting directions with place ID:", error);
+      throw error;
+    }
+  };
+
+  // Get directions using coordinates
   const getRouteDirections = async (startLoc, destinationLoc) => {
     try {
       const apiKey = "AIzaSyDDpFzLAd-65b3ouKzDDXKqt1VEQk3ZfOw";
@@ -94,26 +236,95 @@ export default function RideDetailsScreen() {
       );
       
       const json = await response.json();
-      
-      if (json.routes?.[0]?.legs?.[0]) {
-        const leg = json.routes[0].legs[0];
-        setEta(leg.duration.text);
-        setDistance(leg.distance.text);
-        
-        // Calculate dynamic pricing
-        const km = leg.distance.value / 1000;
-        const min = leg.duration.value / 60;
-        calculatePricing(km, min);
-
-        // Decode polyline
-        const points = polyline.decode(json.routes[0].overview_polyline.points);
-        setRouteCoordinates(points.map(point => ({
-          latitude: point[0],
-          longitude: point[1]
-        })));
-      }
+      processDirectionsResponse(json);
     } catch (error) {
       console.error("Error getting directions:", error);
+      throw error;
+    }
+  };
+  
+  // Process directions response
+  const processDirectionsResponse = (json) => {
+    if (json.routes?.[0]?.legs?.[0]) {
+      const leg = json.routes[0].legs[0];
+      setEta(leg.duration.text);
+      setDistance(leg.distance.text);
+      
+      // Calculate dynamic pricing
+      const km = leg.distance.value / 1000;
+      const min = leg.duration.value / 60;
+      calculatePricing(km, min);
+
+      // Decode polyline
+      const points = polyline.decode(json.routes[0].overview_polyline.points);
+      const coordinates = points.map(point => ({
+        latitude: point[0],
+        longitude: point[1]
+      }));
+      
+      setRouteCoordinates(coordinates);
+      
+      // Get start and end coordinates from route for markers
+      if (!userLocation && leg.start_location) {
+        setUserLocation({
+          latitude: leg.start_location.lat,
+          longitude: leg.start_location.lng
+        });
+      }
+      
+      if ((!destination.latitude || !destination.longitude) && leg.end_location) {
+        setDestinationCoords({
+          latitude: leg.end_location.lat,
+          longitude: leg.end_location.lng
+        });
+      }
+      
+      // Fit map only once - this is key to allow free panning afterward
+      setTimeout(() => {
+        if (mapRef.current && coordinates.length > 0 && !mapFitted) {
+          // Calculate if route is primarily north-south
+          const latitudes = coordinates.map(c => c.latitude);
+          const longitudes = coordinates.map(c => c.longitude);
+          const latDiff = Math.max(...latitudes) - Math.min(...latitudes);
+          const lngDiff = Math.max(...longitudes) - Math.min(...longitudes);
+          const isNorthSouth = latDiff > lngDiff;
+          
+          const originPoint = userLocation || { 
+            latitude: leg.start_location.lat, 
+            longitude: leg.start_location.lng 
+          };
+          
+          const destPoint = destinationCoords || { 
+            latitude: leg.end_location.lat, 
+            longitude: leg.end_location.lng 
+          };
+          
+          const allCoordinates = [originPoint, ...coordinates, destPoint];
+          
+          // Determine paddings based on route orientation and screen size
+          const faresHeight = height * 0.45; // 45% of screen for fares panel
+          const topPadding = isNorthSouth ? height * 0.25 : height * 0.15;
+          
+          mapRef.current.fitToCoordinates(allCoordinates, {
+            edgePadding: { 
+              top: topPadding, 
+              right: width * 0.1, 
+              bottom: faresHeight, 
+              left: width * 0.1 
+            },
+            animated: true
+          });
+          
+          // Mark as fitted so we don't override user panning
+          setMapFitted(true);
+        }
+      }, 500);
+      
+      setLoading(false);
+    } else {
+      Alert.alert("Route Error", "No route found between these locations");
+      setLoading(false);
+      throw new Error("No route found");
     }
   };
 
@@ -189,20 +400,38 @@ export default function RideDetailsScreen() {
   return (
     <View className="flex-1">
       <MapView
+        ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={{ flex: 1 }}
-        region={mapRegion}
+        initialRegion={mapRegion}
+        showsUserLocation={false}
+        rotateEnabled={true}
+        scrollEnabled={true}
+        zoomEnabled={true}
+        pitchEnabled={true}
       >
         {userLocation && (
-          <Marker coordinate={userLocation} title="Your Location">
+          <Marker coordinate={userLocation} title={origin.title || "Your Location"}>
             <View className="bg-blue-500 p-2 rounded-full">
               <MaterialIcons name="my-location" size={16} color="#fff" />
             </View>
           </Marker>
         )}
 
-        {destination.latitude && (
-          <Marker coordinate={destination} title={destination.title}>
+        {(destination.latitude && destination.longitude) ? (
+          <Marker 
+            coordinate={{
+              latitude: destination.latitude,
+              longitude: destination.longitude
+            }} 
+            title={destination.title}
+          >
+            <View className="bg-red-500 p-2 rounded-full">
+              <MaterialIcons name="location-on" size={16} color="#fff" />
+            </View>
+          </Marker>
+        ) : destinationCoords && (
+          <Marker coordinate={destinationCoords} title={destination.title}>
             <View className="bg-red-500 p-2 rounded-full">
               <MaterialIcons name="location-on" size={16} color="#fff" />
             </View>
@@ -216,7 +445,53 @@ export default function RideDetailsScreen() {
             strokeColor="#007bff"
           />
         )}
+        
+        {/* Render nearby drivers */}
+        {nearbyDrivers.map(driver => (
+          <Marker
+            key={driver.id}
+            coordinate={driver.coordinate}
+            title={driver.name}
+          >
+            <View className="bg-red-500 p-2 rounded-full">
+              <MaterialIcons name="local-taxi" size={16} color="#fff" />
+            </View>
+          </Marker>
+        ))}
       </MapView>
+
+      {/* Recenter button for manual navigation */}
+      <TouchableOpacity
+        className="absolute top-4 right-4 bg-white p-3 rounded-full shadow-lg"
+        onPress={() => {
+          if (mapRef.current && routeCoordinates.length > 0 && userLocation && (destinationCoords || destination)) {
+            const destPoint = destination.latitude && destination.longitude
+              ? { latitude: destination.latitude, longitude: destination.longitude }
+              : destinationCoords;
+              
+            if (destPoint) {
+              // Create route coordinates array
+              const allCoordinates = [userLocation, ...routeCoordinates, destPoint];
+              
+              // Dynamic padding based on screen size
+              const faresHeight = height * 0.45; // 45% of screen for fares panel
+              
+              // Refit the map
+              mapRef.current.fitToCoordinates(allCoordinates, {
+                edgePadding: { 
+                  top: height * 0.25, 
+                  right: width * 0.1, 
+                  bottom: faresHeight, 
+                  left: width * 0.1 
+                },
+                animated: true
+              });
+            }
+          }
+        }}
+      >
+        <MaterialIcons name="my-location" size={24} color="#007AFF" />
+      </TouchableOpacity>
 
       {/* Ride Options Overlay */}
       <View className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4 shadow-lg">
@@ -230,10 +505,11 @@ export default function RideDetailsScreen() {
         />
 
         <TouchableOpacity
+          disabled={!selectedRide}
           onPress={() => router.push({
-            pathname: "/searching",
+            pathname: "/services",
             params: {
-              originTitle: "Current Location",
+              originTitle: origin.title || "Current Location",
               originAddress: "Your current location",
               destTitle: destination.title,
               destAddress: destination.address,
@@ -242,10 +518,10 @@ export default function RideDetailsScreen() {
               distance
             }
           })}
-          className="mt-4 px-6 py-3 bg-black rounded-lg"
+          className={`mt-4 px-6 py-3 ${selectedRide ? "bg-black" : "bg-gray-300"} rounded-lg`}
         >
           <Text className="text-white text-center text-lg font-semibold">
-            {selectedRide ? `Confirm ${rideOptions.find(r => r.id === selectedRide).name}` : "Select a Ride"}
+            {selectedRide ? `Confirm ${rideOptions.find(r => r.id === selectedRide)?.name}` : "Select a Ride"}
           </Text>
         </TouchableOpacity>
       </View>

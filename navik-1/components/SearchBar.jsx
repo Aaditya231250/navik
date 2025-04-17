@@ -24,6 +24,7 @@ const SearchBar = () => {
         placeholderTextColor="#808080"
         className="ml-4 text-[17px] flex-1 text-gray-800"
         editable={false}
+        selectTextOnFocus={false}
       />
     </TouchableOpacity>
   );

@@ -15,6 +15,8 @@ import (
 	"matching-service/internal/handler"
 	"matching-service/internal/service"
 	"matching-service/pkg/kafka"
+
+	"github.com/go-redis/redis/v8"
 )
 
 func main() {
@@ -32,10 +34,19 @@ func main() {
 	}
 	defer producer.Close()
 
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     "redis:6379", // Use environment variable in production
+		DB:       0,            // use default DB
+		Password: "",
+	})
+	defer redisClient.Close()
+
 	locationService := service.NewLocationService(nil, producer)
 	locationHandler := handler.NewLocationHandler(locationService)
+	wsHandler := handler.NewWebSocketHandler(redisClient)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", wsHandler.HandleWebSocket)
 	locationHandler.SetupRoutes(mux)
 
 	server := &http.Server{

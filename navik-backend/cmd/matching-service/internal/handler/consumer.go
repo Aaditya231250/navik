@@ -86,8 +86,6 @@ func (h *ConsumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 
 				if err := h.service.ProcessUserLocation(session.Context(), userLoc); err != nil {
 					log.Printf("Error processing user location: %v", err)
-					// You can implement retry logic here if needed
-					// For now, we'll mark it as processed to avoid getting stuck
 				}
 
 				// Mark message as processed

@@ -28,6 +28,7 @@
   | Kishore Vishal | [LinkedIn](https://www.linkedin.com/in/kishore-vishal/) |
   | Aaditya Jain | [LinkedIn](https://www.linkedin.com/in/aaditya-jain-7b85b028b/) |
   | Japneet Singh | [LinkedIn](https://www.linkedin.com/in/japneet-singh-81347b28b/) |
+  | William Samuel | [LinkedIn]|
   
 </div>
 <hr>

@@ -88,8 +88,8 @@ location /health {
         local formatted_time = ngx.http_time(timestamp)
         
         local response = string.format(
-            '{"status":"%s","timestamp":"%s","services":{"kafka":"%s","location-service":"%s","matching-service":"%s","map-service":"%s"}}',
-            overall_status, formatted_time, kafka_status, location_status, matching_status, map_status
+            '{"status":"%s","timestamp":"%s","services":{"kafka":"%s","location-service":"%s","matching-service":"%s","map-service":"%s","payment-service":"%s"}}',
+            overall_status, formatted_time, location_status, location_status, matching_status, map_status,map_status
         )
         
         ngx.say(response)

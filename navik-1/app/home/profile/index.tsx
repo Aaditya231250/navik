@@ -102,13 +102,14 @@ export default function ProfileScreen() {
       {/* Profile Options */}
       <View className="mt-8 px-4 space-y-4">
         {/* Edit Profile */}
-        <TouchableOpacity className="flex-row items-center justify-between p-4 bg-gray-100 rounded-lg">
+        {/* <TouchableOpacity className="flex-row items-center justify-between p-4 bg-gray-100 rounded-lg">
           <Text className="text-base font-medium">Edit Profile</Text>
           <MaterialIcons name="edit" size={24} color="#000" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         {/* Payment Methods */}
-        <TouchableOpacity className="flex-row items-center justify-between p-4 bg-gray-100 rounded-lg">
+        <TouchableOpacity className="flex-row items-center justify-between p-4 bg-gray-100 rounded-lg"
+        onPress={() => router.push("/payment")}>
           <Text className="text-base font-medium">Payment Methods</Text>
           <MaterialIcons name="payment" size={24} color="#000" />
         </TouchableOpacity>

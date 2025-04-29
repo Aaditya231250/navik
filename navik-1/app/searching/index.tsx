@@ -251,7 +251,7 @@ export default function SearchingScreen() {
           
           // Show completion message and redirect after 5 seconds
           setTimeout(() => {
-            router.replace("/");
+            router.replace("/home");
           }, 5000);
         }
       }
@@ -367,7 +367,7 @@ export default function SearchingScreen() {
             <FontAwesome name="star" size={16} color="#FFD700" />
             <Text style={styles.ratingText}>{selectedDriver?.rating}</Text>
           </View>
-          <Text style={styles.carInfo}>{selectedDriver?.carModel} • {selectedDriver?.plateNumber}</Text>
+          <Text style={styles.carInfo}>{selectedDriver?.carModel} â€¢ {selectedDriver?.plateNumber}</Text>
         </View>
         <View style={styles.actionButtons}>
           <TouchableOpacity style={styles.actionButton}>
@@ -499,7 +499,7 @@ export default function SearchingScreen() {
       
       <TouchableOpacity 
         style={styles.homeButton}
-        onPress={() => router.replace("/")}
+        onPress={() => router.replace("/home")}
       >
         <Text style={styles.homeButtonText}>Back to Home</Text>
       </TouchableOpacity>

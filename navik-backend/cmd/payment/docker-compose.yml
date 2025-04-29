@@ -4,8 +4,10 @@ services:
   payment:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: payment.Dockerfile
     container_name: payment
+    ports:
+      - "8087:8087"
     deploy:
       resources:
         limits:
